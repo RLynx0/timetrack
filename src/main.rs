@@ -4,7 +4,9 @@ const END_SENTINEL: &str = "__END";
 
 use std::{
     collections::HashMap,
-    env, fs,
+    env,
+    fmt::Display,
+    fs,
     io::{self, BufReader, BufWriter, Read, Seek},
     path::{Path, PathBuf},
     process::exit,
@@ -58,33 +60,10 @@ fn get_last_state_entry(path: &Path) -> anyhow::Result<Option<ActivityEntry>> {
     match rev_lines.next() {
         Some(res) => {
             let entry = &String::from_utf8(res?)?;
-            Ok(Some(parse_state_entry(entry)?))
+            Ok(Some(ActivityEntry::from_str(entry)?))
         }
         None => Ok(None),
     }
-}
-
-fn parse_state_entry(input_line: &str) -> anyhow::Result<ActivityEntry> {
-    let mut fields = input_line.split('\t');
-    let time_stamp = fields.next().ok_or(anyhow!("Missing timestamp"))?;
-    let activity_name = fields.next().ok_or(anyhow!("Missing activity name"))?;
-
-    let time_stamp = DateTime::from_str(time_stamp)?;
-    if activity_name == END_SENTINEL {
-        return Ok(ActivityEntry::End(time_stamp));
-    }
-
-    let attendance_type = fields.next().ok_or(anyhow!("Missing attendance type"))?;
-    let wbs = fields.next().ok_or(anyhow!("Missing wbs"))?;
-    let description = fields.next().unwrap_or_default();
-
-    Ok(ActivityEntry::Start(ActivityStart {
-        start: time_stamp,
-        activity_name: Rc::from(activity_name),
-        attendance_type: Rc::from(attendance_type),
-        description: Rc::from(description),
-        wbs: Rc::from(wbs),
-    }))
 }
 
 fn main() {
@@ -121,6 +100,34 @@ fn main() {
 }
 
 #[derive(Debug, Clone)]
+enum ParseEntryErr {
+    MissingTime,
+    MissingName,
+    MissingAttendance,
+    MissingWbs,
+    ParseDatetime(chrono::format::ParseError),
+}
+impl std::error::Error for ParseEntryErr {}
+impl Display for ParseEntryErr {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            ParseEntryErr::MissingTime => write!(f, "missing time stamp"),
+            ParseEntryErr::MissingName => write!(f, "missing activitiy name"),
+            ParseEntryErr::MissingAttendance => write!(f, "missing attendance type"),
+            ParseEntryErr::MissingWbs => write!(f, "missing wbs"),
+            ParseEntryErr::ParseDatetime(parse_error) => {
+                write!(f, "failed to parse time stamp: {}", parse_error)
+            }
+        }
+    }
+}
+impl From<chrono::format::ParseError> for ParseEntryErr {
+    fn from(value: chrono::format::ParseError) -> Self {
+        ParseEntryErr::ParseDatetime(value)
+    }
+}
+
+#[derive(Debug, Clone)]
 enum ActivityEntry {
     Start(ActivityStart),
     End(DateTime<Local>),
@@ -131,6 +138,31 @@ impl ActivityEntry {
             ActivityEntry::Start(activity_start) => &activity_start.start,
             ActivityEntry::End(end_time) => end_time,
         }
+    }
+}
+impl FromStr for ActivityEntry {
+    type Err = ParseEntryErr;
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        let mut fields = s.split('\t');
+        let time_stamp = fields.next().ok_or(ParseEntryErr::MissingTime)?;
+        let activity_name = fields.next().ok_or(ParseEntryErr::MissingName)?;
+
+        let time_stamp = DateTime::from_str(time_stamp)?;
+        if activity_name == END_SENTINEL {
+            return Ok(ActivityEntry::End(time_stamp));
+        }
+
+        let attendance_type = fields.next().ok_or(ParseEntryErr::MissingAttendance)?;
+        let wbs = fields.next().ok_or(ParseEntryErr::MissingWbs)?;
+        let description = fields.next().unwrap_or_default();
+
+        Ok(ActivityEntry::Start(ActivityStart {
+            start: time_stamp,
+            activity_name: Rc::from(activity_name),
+            attendance_type: Rc::from(attendance_type),
+            description: Rc::from(description),
+            wbs: Rc::from(wbs),
+        }))
     }
 }
 
