@@ -1,11 +1,17 @@
-use clap::{Parser, Subcommand};
+use std::path::PathBuf;
+
+pub use clap::{Parser, Subcommand};
 
 #[derive(Debug, Clone, Parser)]
 #[command(author, version, about, long_about = None)]
 #[command(propagate_version = true)]
 pub struct Opt {
     #[command(subcommand)]
-    command: SubCommand,
+    pub command: SubCommand,
+
+    /// Specify custom config path
+    #[clap(short, long)]
+    pub config: Option<PathBuf>,
 }
 
 #[derive(Debug, Clone, Subcommand)]
@@ -20,16 +26,27 @@ pub enum SubCommand {
         activity: String,
     },
 
+    /// Stop tracking time
+    #[command()]
+    End,
+
     /// Define a new trackable activity
     #[command()]
-    New {
+    Add {
         /// The name of the new activity
         name: String,
     },
 
-    /// Stop tracking time
+    /// Remove a specified trackable activity
     #[command()]
-    End,
+    Remove {
+        /// The name of the activity to remove
+        name: String,
+    },
+
+    /// List all trackable activities
+    #[command()]
+    List,
 
     /// Generate output file for a specified time frame
     #[command()]
@@ -42,4 +59,8 @@ pub enum SubCommand {
         #[clap(short, long)]
         file_path: Option<String>,
     },
+
+    /// Print the default configuration to stdout and exit
+    #[command()]
+    DumpDefaultConfig,
 }

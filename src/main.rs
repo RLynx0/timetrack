@@ -1,6 +1,6 @@
 #![allow(unused)] // TODO: Remove this when more things are implemented
 
-use std::{collections::HashMap, env, fs, path::PathBuf, rc::Rc};
+use std::{collections::HashMap, env, fs, path::PathBuf, process::exit, rc::Rc};
 
 use chrono::{DateTime, Datelike, Local, NaiveDate, TimeDelta};
 use clap::Parser;
@@ -32,7 +32,7 @@ fn get_xdg_data_home() -> anyhow::Result<PathBuf> {
     }
 }
 
-fn get_default_config_path() -> anyhow::Result<PathBuf> {
+fn default_config_path() -> anyhow::Result<PathBuf> {
     let mut config_home = get_xdg_config_home()?;
     config_home.push("timetracker");
     config_home.push("config.toml");
@@ -41,14 +41,30 @@ fn get_default_config_path() -> anyhow::Result<PathBuf> {
 
 fn main() {
     let opt = Opt::parse();
-    println!("{opt:#?}");
-
-    let config_path = get_default_config_path().unwrap();
-    if let Some(dir_path) = config_path.parent() {
-        fs::create_dir_all(dir_path).unwrap();
+    if let opt::SubCommand::DumpDefaultConfig = opt.command {
+        println!("{}", include_str!("../default_config.toml"));
+        exit(0)
     }
 
-    let config_result = toml::from_str::<Config>(include_str!("../default_config.toml"));
+    println!("{opt:#?}");
+
+    let config_path = opt.config.unwrap_or_else(|| default_config_path().unwrap());
+    let config_str = match fs::read_to_string(&config_path) {
+        Ok(s) => s,
+        Err(e) => {
+            eprintln!(
+                "Failed to read config: {e}\n\n\
+                Make sure {config_path:?} exists before running the program!\n\
+                You can generate a reference config with the dump-default-config option.\n"
+            );
+            if let Some(conf_dir) = config_path.parent() {
+                eprintln!("  $ mkdir -p {conf_dir:?}");
+            }
+            eprintln!("  $ timetracker dump-default-config > {config_path:?}");
+            exit(1)
+        }
+    };
+    let config_result = toml::from_str::<Config>(&config_str);
     println!("{config_result:#?}");
 }
 
@@ -69,6 +85,7 @@ impl ActivityEntry {
 #[derive(Debug, Clone)]
 struct ActivityStart {
     attendance_type: Rc<str>,
+    activity_name: Rc<str>,
     description: Rc<str>,
     start: DateTime<Local>,
     wbs: Rc<str>,
