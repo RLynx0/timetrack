@@ -10,20 +10,20 @@ mod format_string;
 mod opt;
 
 fn get_xdg_config_home() -> anyhow::Result<PathBuf> {
-    match std::env::var("XDG_CONFIG_HOME") {
+    match env::var("XDG_CONFIG_HOME") {
         Ok(path) => Ok(PathBuf::from(path)),
         Err(_) => Ok(PathBuf::from_iter([
-            std::env::var("HOME")?,
+            env::var("HOME")?,
             String::from(".config"),
         ])),
     }
 }
 
 fn get_xdg_data_home() -> anyhow::Result<PathBuf> {
-    match std::env::var("XDG_DATA_HOME") {
+    match env::var("XDG_DATA_HOME") {
         Ok(path) => Ok(PathBuf::from(path)),
         Err(_) => Ok(PathBuf::from_iter([
-            std::env::var("HOME")?,
+            env::var("HOME")?,
             String::from(".local"),
             String::from("share"),
         ])),
