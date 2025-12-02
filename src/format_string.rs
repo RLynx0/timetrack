@@ -20,10 +20,13 @@ pub struct FormatString {
 }
 
 impl FormatString {
-    pub(crate) fn evaluate<'a, S: AsRef<str>>(
+    pub(crate) fn evaluate<'a, S>(
         &'a self,
         variables: &'a HashMap<&str, S>,
-    ) -> Result<String, EvalError<'a>> {
+    ) -> Result<String, EvalError<'a>>
+    where
+        S: AsRef<str>,
+    {
         let mut buffer = String::new();
         for part in &self.parts {
             match part {

@@ -139,13 +139,13 @@ fn get_group_key<'a>(activity: &'a ActivityStart) -> ActivityGroupKey<'a> {
     }
 }
 
-fn vars_from_config<'a>(cfg: &'a Config) -> HashMap<&'static str, Rc<str>> {
+fn vars_from_config<'a>(cfg: &'a Config) -> HashMap<&'static str, &'a str> {
     HashMap::from([
-        ("employee_name", Rc::from(cfg.employee_name.as_str())),
-        ("employee_number", Rc::from(cfg.employee_number.as_str())),
-        ("cost_center", Rc::from(cfg.cost_center.as_str())),
-        ("performance_type", Rc::from(cfg.performance_type.as_str())),
-        ("accounting_cycle", Rc::from(cfg.accounting_cycle.as_str())),
+        ("employee_name", cfg.employee_name.as_str()),
+        ("employee_number", cfg.employee_number.as_str()),
+        ("cost_center", cfg.cost_center.as_str()),
+        ("performance_type", cfg.performance_type.as_str()),
+        ("accounting_cycle", cfg.accounting_cycle.as_str()),
     ])
 }
 
