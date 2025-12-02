@@ -10,7 +10,7 @@ use std::{
 use clap::Parser;
 use rev_lines::RawRevLines;
 
-use crate::{config::Config, entry::ActivityEntry, opt::Opt};
+use crate::{entry::ActivityEntry, opt::Opt};
 
 mod config;
 mod entry;

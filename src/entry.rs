@@ -37,14 +37,19 @@ impl From<chrono::format::ParseError> for ParseEntryError {
 #[derive(Debug, Clone)]
 pub enum ActivityEntry {
     Start(ActivityStart),
-    End(DateTime<Local>),
+    End(ActivityEnd),
+}
+
+#[derive(Debug, Clone)]
+pub struct ActivityEnd {
+    time_stamp: DateTime<Local>,
 }
 
 impl ActivityEntry {
     fn time_stamp(&self) -> &DateTime<Local> {
         match self {
-            ActivityEntry::Start(activity_start) => &activity_start.start,
-            ActivityEntry::End(end_time) => end_time,
+            ActivityEntry::Start(start) => &start.time_stamp,
+            ActivityEntry::End(end) => &end.time_stamp,
         }
     }
 }
@@ -58,7 +63,7 @@ impl FromStr for ActivityEntry {
 
         let time_stamp = DateTime::from_str(time_stamp)?;
         if activity_name == END_SENTINEL {
-            return Ok(ActivityEntry::End(time_stamp));
+            return Ok(ActivityEntry::End(ActivityEnd { time_stamp }));
         }
 
         let attendance_type = fields.next().ok_or(ParseEntryError::MissingAttendance)?;
@@ -66,7 +71,7 @@ impl FromStr for ActivityEntry {
         let description = fields.next().unwrap_or_default();
 
         Ok(ActivityEntry::Start(ActivityStart {
-            start: time_stamp,
+            time_stamp,
             activity_name: Rc::from(activity_name),
             attendance_type: Rc::from(attendance_type),
             description: Rc::from(description),
@@ -77,16 +82,18 @@ impl FromStr for ActivityEntry {
 impl Display for ActivityEntry {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
-            ActivityEntry::End(time) => write!(f, "{time}\t{END_SENTINEL}"),
+            ActivityEntry::End(ActivityEnd { time_stamp }) => {
+                write!(f, "{time_stamp}\t{END_SENTINEL}")
+            }
             ActivityEntry::Start(ActivityStart {
-                start,
+                time_stamp,
                 activity_name,
                 attendance_type,
                 description,
                 wbs,
             }) => write!(
                 f,
-                "{start}\t{activity_name}\t{attendance_type}\t{wbs}\t{description}"
+                "{time_stamp}\t{activity_name}\t{attendance_type}\t{wbs}\t{description}"
             ),
         }
     }
@@ -94,7 +101,7 @@ impl Display for ActivityEntry {
 
 #[derive(Debug, Clone)]
 pub struct ActivityStart {
-    start: DateTime<Local>,
+    time_stamp: DateTime<Local>,
     activity_name: Rc<str>,
     attendance_type: Rc<str>,
     description: Rc<str>,
@@ -134,10 +141,10 @@ fn group_activities(
                     attendance_type: previous.attendance_type.clone(),
                     description: previous.description.clone(),
                     duration: TimeDelta::zero(),
-                    start_of_first: previous.start,
+                    start_of_first: previous.time_stamp,
                     wbs: previous.wbs.clone(),
                 })
-                .duration += *current_entry.time_stamp() - previous.start
+                .duration += *current_entry.time_stamp() - previous.time_stamp
         }
         previous_entry = match current_entry {
             ActivityEntry::Start(activity_start) => Some(activity_start),
@@ -165,7 +172,7 @@ fn get_group_key<'a>(activity: &'a ActivityStart) -> ActivityGroupKey<'a> {
         wbs: &activity.wbs,
         attendance_type: &activity.attendance_type,
         description: &activity.description,
-        date: activity.start.naive_local().date(),
+        date: activity.time_stamp.naive_local().date(),
     }
 }
 
