@@ -1,7 +1,7 @@
 #![allow(unused)] // TODO: Remove this when more things are implemented
 
 use std::{
-    env, fs,
+    fs,
     path::{Path, PathBuf},
     process::exit,
     str::FromStr,
@@ -10,40 +10,13 @@ use std::{
 use clap::Parser;
 use rev_lines::RawRevLines;
 
-use crate::{entry::ActivityEntry, opt::Opt};
+use crate::{entry::ActivityEntry, files::default_config_path, opt::Opt};
 
 mod config;
 mod entry;
+mod files;
 mod format_string;
 mod opt;
-
-fn get_xdg_config_home() -> anyhow::Result<PathBuf> {
-    match env::var("XDG_CONFIG_HOME") {
-        Ok(path) => Ok(PathBuf::from(path)),
-        Err(_) => Ok(PathBuf::from_iter([
-            env::var("HOME")?,
-            String::from(".config"),
-        ])),
-    }
-}
-
-fn get_xdg_data_home() -> anyhow::Result<PathBuf> {
-    match env::var("XDG_DATA_HOME") {
-        Ok(path) => Ok(PathBuf::from(path)),
-        Err(_) => Ok(PathBuf::from_iter([
-            env::var("HOME")?,
-            String::from(".local"),
-            String::from("share"),
-        ])),
-    }
-}
-
-fn default_config_path() -> anyhow::Result<PathBuf> {
-    let mut config_home = get_xdg_config_home()?;
-    config_home.push("timetracker");
-    config_home.push("config.toml");
-    Ok(config_home)
-}
 
 fn get_last_state_entry(path: &Path) -> anyhow::Result<Option<ActivityEntry>> {
     let file = fs::File::open(path)?;
