@@ -1,6 +1,6 @@
 use std::{collections::HashMap, env, fs, path::PathBuf, rc::Rc};
 
-use chrono::{DateTime, Local, NaiveDate, TimeDelta};
+use chrono::{DateTime, Datelike, Local, NaiveDate, TimeDelta};
 use clap::Parser;
 
 use crate::{config::Config, opt::Opt};
@@ -137,4 +137,35 @@ fn get_group_key<'a>(activity: &'a ActivityStart) -> ActivityGroupKey<'a> {
         description: &activity.description,
         date: activity.start.naive_local().date(),
     }
+}
+
+fn vars_from_config<'a>(cfg: &'a Config) -> HashMap<&'static str, Rc<str>> {
+    HashMap::from([
+        ("employee_name", Rc::from(cfg.employee_name.as_str())),
+        ("employee_number", Rc::from(cfg.employee_number.as_str())),
+        ("cost_center", Rc::from(cfg.cost_center.as_str())),
+        ("performance_type", Rc::from(cfg.performance_type.as_str())),
+        ("accounting_cycle", Rc::from(cfg.accounting_cycle.as_str())),
+    ])
+}
+
+fn vars_from_collapsed_activity<'a>(
+    activity: &'a CollapsedActivity,
+) -> HashMap<&'static str, Rc<str>> {
+    let date = activity.start_of_first.naive_local().date();
+    let seconds = activity.duration.as_seconds_f64();
+    HashMap::from([
+        // Regarding date
+        ("year", Rc::from(date.year().to_string())),
+        ("month", Rc::from(date.month().to_string())),
+        ("day", Rc::from(date.year().to_string())),
+        // Regarding duration
+        ("hours", Rc::from((seconds / 3600.0).to_string())),
+        ("minutes", Rc::from((seconds / 60.0).to_string())),
+        ("seconds", Rc::from(seconds.to_string())),
+        // Other
+        ("attendance_type", activity.attendance_type.clone()),
+        ("description", activity.description.clone()),
+        ("wbs", activity.wbs.clone()),
+    ])
 }

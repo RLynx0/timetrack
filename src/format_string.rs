@@ -1,7 +1,7 @@
 use std::{
-    collections::{HashMap, hash_map::Keys},
+    collections::HashMap,
     error::Error,
-    fmt::Display,
+    fmt::{Debug, Display},
 };
 
 use nom::{
@@ -20,20 +20,20 @@ pub struct FormatString {
 }
 
 impl FormatString {
-    pub(crate) fn evaluate<'a>(
+    pub(crate) fn evaluate<'a, S: AsRef<str>>(
         &'a self,
-        variables: &'a HashMap<String, String>,
+        variables: &'a HashMap<&str, S>,
     ) -> Result<String, EvalError<'a>> {
         let mut buffer = String::new();
         for part in &self.parts {
             match part {
                 FormatStringPart::Literal(string) => buffer.push_str(string),
-                FormatStringPart::Variable(variable) => match variables.get(variable) {
-                    Some(value) => buffer.push_str(value),
+                FormatStringPart::Variable(variable) => match variables.get(variable.as_str()) {
+                    Some(value) => buffer.push_str(value.as_ref()),
                     None => {
                         return Err(EvalError::VarNotFound {
+                            provided: variables.keys().copied().collect(),
                             requested: variable,
-                            provided: variables.keys(),
                         });
                     }
                 },
@@ -79,7 +79,7 @@ pub enum FormatStringPart {
 pub enum EvalError<'a> {
     VarNotFound {
         requested: &'a str,
-        provided: Keys<'a, String, String>,
+        provided: Vec<&'a str>,
     },
 }
 impl<'a> Error for EvalError<'a> {}
