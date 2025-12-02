@@ -10,13 +10,57 @@ use std::{
 use clap::Parser;
 use rev_lines::RawRevLines;
 
-use crate::{entry::ActivityEntry, files::default_config_path, opt::Opt};
+use crate::{config::Config, entry::ActivityEntry, opt::Opt};
 
 mod config;
 mod entry;
 mod files;
 mod format_string;
 mod opt;
+
+fn main() {
+    let opt = Opt::parse();
+
+    let config = match load_or_create_config(opt.config) {
+        Ok(c) => c,
+        Err(e) => {
+            eprintln!("Failed to load or create config: {e}");
+            exit(1)
+        }
+    };
+
+    println!("{config:?}")
+
+    // let config_result = toml::from_str::<Config>(&config_str);
+    // println!("{config_result:#?}");
+}
+
+fn load_or_create_config(custom_path: Option<PathBuf>) -> anyhow::Result<Config> {
+    let config_path = match custom_path {
+        None => files::default_config_path()?,
+        Some(p) => p,
+    };
+    if fs::exists(&config_path)? {
+        let config_str = fs::read_to_string(config_path)?;
+        Ok(toml::from_str(&config_str)?)
+    } else {
+        let config = make_guided_config();
+        let config_str = toml::to_string(&config)?;
+        if let Some(p) = config_path.parent() {
+            fs::create_dir_all(p)?;
+        }
+        fs::write(&config_path, config_str)?;
+        println!("Saved generated configuration to {config_path:?}");
+        Ok(config)
+    }
+}
+
+fn make_guided_config() -> Config {
+    let default = toml::from_str::<Config>(include_str!("../default_config.toml"))
+        .expect("Default config must be valid");
+
+    default
+}
 
 fn get_last_state_entry(path: &Path) -> anyhow::Result<Option<ActivityEntry>> {
     let file = fs::File::open(path)?;
@@ -28,37 +72,4 @@ fn get_last_state_entry(path: &Path) -> anyhow::Result<Option<ActivityEntry>> {
         }
         None => Ok(None),
     }
-}
-
-fn main() {
-    let opt = Opt::parse();
-    if let opt::SubCommand::DumpDefaultConfig = opt.command {
-        println!("{}", include_str!("../default_config.toml"));
-        exit(0)
-    }
-
-    println!(
-        "{:#?}",
-        get_last_state_entry(&PathBuf::from("./state_sample"))
-    );
-
-    let config_path = opt.config.unwrap_or_else(|| default_config_path().unwrap());
-    let config_str = match fs::read_to_string(&config_path) {
-        Ok(s) => s,
-        Err(e) => {
-            eprintln!(
-                "Failed to read config: {e}\n\n\
-                Make sure {config_path:?} exists before running the program!\n\
-                You can generate a reference config with the dump-default-config option.\n"
-            );
-            if let Some(conf_dir) = config_path.parent() {
-                eprintln!("  $ mkdir -p {conf_dir:?}");
-            }
-            eprintln!("  $ timetracker dump-default-config > {config_path:?}");
-            exit(1)
-        }
-    };
-
-    // let config_result = toml::from_str::<Config>(&config_str);
-    // println!("{config_result:#?}");
 }

@@ -59,8 +59,4 @@ pub enum SubCommand {
         #[clap(short, long)]
         file_path: Option<String>,
     },
-
-    /// Print the default configuration to stdout and exit
-    #[command()]
-    DumpDefaultConfig,
 }

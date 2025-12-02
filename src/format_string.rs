@@ -12,7 +12,7 @@ use nom::{
     multi::{many0, many1},
     sequence::{delimited, pair, preceded},
 };
-use serde::{Deserialize, de::Visitor};
+use serde::{Deserialize, Serialize, de::Visitor};
 
 #[derive(Debug, Clone)]
 pub struct FormatString {
@@ -45,6 +45,17 @@ impl FormatString {
         Ok(buffer)
     }
 }
+impl Display for FormatString {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        for part in &self.parts {
+            match part {
+                FormatStringPart::Variable(v) => write!(f, "${{{}}}", v)?,
+                FormatStringPart::Literal(s) => write!(f, "{}", s.replace("$", "$$"))?,
+            }
+        }
+        Ok(())
+    }
+}
 impl<'de> Deserialize<'de> for FormatString {
     fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
     where
@@ -69,6 +80,14 @@ impl<'de> Deserialize<'de> for FormatString {
         }
 
         deserializer.deserialize_str(FormatStringVisitor)
+    }
+}
+impl Serialize for FormatString {
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: serde::Serializer,
+    {
+        serializer.serialize_str(&self.to_string())
     }
 }
 

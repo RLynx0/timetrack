@@ -1,10 +1,10 @@
 use std::collections::HashMap;
 
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 
 use crate::format_string::FormatString;
 
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Config {
     pub employee_name: String,
     pub employee_number: String,
@@ -17,7 +17,7 @@ pub struct Config {
     pub attendance_types: HashMap<String, String>,
 }
 
-#[derive(Debug, Clone, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct OutputConfig {
     pub upload_destination: String,
     pub file_name_format: FormatString,
