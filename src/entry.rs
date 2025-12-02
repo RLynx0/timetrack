@@ -39,11 +39,6 @@ pub enum ActivityEntry {
     Start(ActivityStart),
     End(ActivityEnd),
 }
-
-#[derive(Debug, Clone)]
-pub struct ActivityEnd {
-    time_stamp: DateTime<Local>,
-}
 impl ActivityEntry {
     fn new_start(activity_name: &str, attendance_type: &str, wbs: &str, description: &str) -> Self {
         ActivityEntry::Start(ActivityStart {
@@ -109,6 +104,11 @@ impl Display for ActivityEntry {
             ),
         }
     }
+}
+
+#[derive(Debug, Clone)]
+pub struct ActivityEnd {
+    time_stamp: DateTime<Local>,
 }
 
 #[derive(Debug, Clone)]
