@@ -44,8 +44,21 @@ pub enum ActivityEntry {
 pub struct ActivityEnd {
     time_stamp: DateTime<Local>,
 }
-
 impl ActivityEntry {
+    fn new_start(activity_name: &str, attendance_type: &str, wbs: &str, description: &str) -> Self {
+        ActivityEntry::Start(ActivityStart {
+            time_stamp: Local::now(),
+            activity_name: Rc::from(activity_name),
+            attendance_type: Rc::from(attendance_type),
+            description: Rc::from(description),
+            wbs: Rc::from(wbs),
+        })
+    }
+    fn new_end() -> Self {
+        ActivityEntry::End(ActivityEnd {
+            time_stamp: Local::now(),
+        })
+    }
     fn time_stamp(&self) -> &DateTime<Local> {
         match self {
             ActivityEntry::Start(start) => &start.time_stamp,
@@ -53,7 +66,6 @@ impl ActivityEntry {
         }
     }
 }
-
 impl FromStr for ActivityEntry {
     type Err = ParseEntryError;
     fn from_str(s: &str) -> Result<Self, Self::Err> {
