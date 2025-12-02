@@ -1,4 +1,4 @@
-use std::{collections::HashMap, env, fs, path::PathBuf};
+use std::{collections::HashMap, env, fs, path::PathBuf, rc::Rc};
 
 use chrono::{DateTime, Local, NaiveDate, TimeDelta};
 use clap::Parser;
@@ -66,10 +66,10 @@ impl ActivityEntry {
 
 #[derive(Debug, Clone)]
 struct ActivityStart {
-    attendance_type: String,
-    description: String,
+    attendance_type: Rc<str>,
+    description: Rc<str>,
     start: DateTime<Local>,
-    wbs: String,
+    wbs: Rc<str>,
 }
 
 /// Grouping of activities with
@@ -79,11 +79,11 @@ struct ActivityStart {
 /// - Same local date (precise time is irrelevant)
 #[derive(Debug, Clone)]
 struct CollapsedActivity {
-    attendance_type: String,
-    description: String,
+    attendance_type: Rc<str>,
+    description: Rc<str>,
     duration: TimeDelta,
     start_of_first: DateTime<Local>,
-    wbs: String,
+    wbs: Rc<str>,
 }
 
 fn group_activities(
