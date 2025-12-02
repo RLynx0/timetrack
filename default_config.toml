@@ -1,0 +1,44 @@
+employee_name = "Andrew Jason" # Your name
+employee_number = "12345678"   # Your personnel number
+cost_center = "123456"         # Your cost center
+performance_type = "ABCXYZ"    # Your performance type
+accounting_cycle = "0030"      # This is likely what you want
+default_attendance = '0800'    # Your default attendance type
+
+
+# 💡You probably won't have to change the remaining sections for TSA
+
+[output]
+upload_destination = '\\T-Systems.int.neonet.at\Data\Special\TSA-Accounting\CATS-Aktuell'
+file_name_format = '${year}${month}_${cost_center}_${performance_type}_${employee_number}.txt'
+keys   = ['Datum', 'I.00309999.99.99[.99]', 'Anwesenheitsart', 'Stunden', 'Beschreibung']
+values = ['$day/$month/${year}', '${wbs}', '${attendance_type}', '${hours}', '${description}']
+delimeter = "\t"
+
+[attendance_types]
+0216 = "Arbeitssuchetag"
+0230 = "Arztbesuch untertägig"
+0210 = "Behördenweg"
+0802 = "Bereitschaftseinsatz"
+0805 = "Bereitschaftseinsatz Homeoffice"
+0430 = "Berufsschule"
+0218 = "Bildungsfreistellung"
+0910 = "Ersatzruhe"
+9000 = "Fahrzeit"
+0221 = "Feistellung konfessionsabhängiger Feiertag"
+0806 = "Geplanter Bereitschaftseinsatz Homeoffice"
+0803 = "Geplanter Bereitschaftseinsatz"
+0900 = "Gleitzeitausgleich"
+0804 = "Homeoffice"
+0310 = "Krankheit untertägig"
+0801 = "Mobile Working"
+0150 = "Pflegefreistellung 1. Woche"
+0160 = "Pflegefreistellung 2. Woche"
+0800 = "Produktivstunden"
+0420 = "Seminar, Kurs, Lehrgang"
+0225 = "Sonstige bezahlte Abwesenheit (Ehe)"
+0223 = "Sonstige bezahlte Abwesenheit (Geburt)"
+0222 = "Sonstige bezahlte Abwesenheit (Tod)"
+0224 = "Sonstige bezahlte Abwesenheit (Umzug)"
+0220 = "Sonstige bezahlte Abwesenheit"
+0807 = "Workation"
