@@ -16,47 +16,67 @@ pub struct Opt {
 
 #[derive(Debug, Clone, Subcommand)]
 pub enum SubCommand {
-    /// Start tracking time for a specified activity
-    ///
-    /// This ends tracking of the previous activity
     #[command()]
-    Start {
-        /// Start tracking time for this activity
-        #[clap(default_value = "Idle")]
-        activity: String,
-    },
-
-    /// Stop tracking time
+    Start(Start),
     #[command()]
-    End,
-
-    /// Define a new trackable activity
+    End(End),
     #[command()]
-    Add {
-        /// The name of the new activity
-        name: String,
-    },
-
-    /// Remove a specified trackable activity
+    New(New),
     #[command()]
-    Remove {
-        /// The name of the activity to remove
-        name: String,
-    },
-
-    /// List all trackable activities
+    Remove(Remove),
     #[command()]
-    List,
-
-    /// Generate output file for a specified time frame
+    List(List),
     #[command()]
-    Generate {
-        /// Print to stdout instead of saving to file
-        #[clap(short, long)]
-        stdout: bool,
+    Generate(Generate),
+}
 
-        /// Save to custom filepath
-        #[clap(short, long)]
-        file_path: Option<String>,
-    },
+/// Start tracking time for a specified activity
+///
+/// This ends tracking of the previous activity
+#[derive(Debug, Clone, Parser)]
+pub struct Start {
+    /// Start tracking time for this activity
+    #[clap(default_value = "Idle")]
+    pub activity: String,
+}
+
+/// Stop tracking time
+#[derive(Debug, Clone, Parser)]
+pub struct End;
+
+/// Define a new trackable activity
+#[derive(Debug, Clone, Parser)]
+pub struct New {
+    /// The name of the new activity
+    name: String,
+}
+
+/// Remove a specified trackable activity
+///
+/// Entries using this activity will still be valid,
+/// but you won't be able to create new ones with it.
+#[derive(Debug, Clone, Parser)]
+pub struct Remove {
+    /// The name of the activity to remove
+    name: String,
+
+    /// Allow removing activity hierarchies
+    #[clap(short, long)]
+    recursive: bool,
+}
+
+/// List all trackable activities
+#[derive(Debug, Clone, Parser)]
+pub struct List;
+
+/// Generate output file for a specified time frame
+#[derive(Debug, Clone, Parser)]
+pub struct Generate {
+    /// Print to stdout instead of saving to file
+    #[clap(short, long)]
+    stdout: bool,
+
+    /// Save to custom filepath
+    #[clap(short, long)]
+    file_path: Option<String>,
 }

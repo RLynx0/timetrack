@@ -11,7 +11,11 @@ use std::{
 use clap::Parser;
 use rev_lines::RawRevLines;
 
-use crate::{config::Config, entry::ActivityEntry, opt::Opt};
+use crate::{
+    config::Config,
+    entry::ActivityEntry,
+    opt::{Opt, Start},
+};
 
 mod config;
 mod entry;
@@ -22,6 +26,15 @@ mod opt;
 fn main() {
     let opt = Opt::parse();
 
+    let operation_result = match opt.command {
+        opt::SubCommand::Start(_) => todo!(),
+        opt::SubCommand::End(_) => todo!(),
+        opt::SubCommand::New(_) => todo!(),
+        opt::SubCommand::Remove(_) => todo!(),
+        opt::SubCommand::List(_) => todo!(),
+        opt::SubCommand::Generate(_) => todo!(),
+    };
+
     let config = match load_or_create_config(opt.config) {
         Ok(c) => c,
         Err(e) => {
@@ -29,11 +42,6 @@ fn main() {
             exit(1)
         }
     };
-
-    println!("{config:?}")
-
-    // let config_result = toml::from_str::<Config>(&config_str);
-    // println!("{config_result:#?}");
 }
 
 fn load_or_create_config(custom_path: Option<PathBuf>) -> anyhow::Result<Config> {
