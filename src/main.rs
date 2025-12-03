@@ -38,6 +38,19 @@ fn main() {
     };
 }
 
+macro_rules! verbose_print_pretty {
+    ($cond:expr => [$($k:expr => $v:expr,)+]) => {
+        if $cond {
+            $(
+                (!$v.to_string().trim().is_empty()).then(|| println!(
+                    "-> \u{001b}[34m{:12}\u{001b}[0m: {}",
+                    $k, $v
+                ));
+            )+
+        }
+    };
+}
+
 fn start_activity(config: &Config, start_opts: &opt::Start) -> anyhow::Result<()> {
     let activity_name = &start_opts.activity;
 
@@ -55,27 +68,32 @@ fn start_activity(config: &Config, start_opts: &opt::Start) -> anyhow::Result<()
     };
 
     let entry = ActivityEntry::new_start(activity_name, attendance, wbs, &descr);
-    println!("Started tracking activity '{activity_name}'");
+    println!("Started tracking activity \u{001B}[32m'{activity_name}'\u{001B}[0m");
 
-    if start_opts.verbose {
-        let timestamp = entry.time_stamp();
-        (!descr.is_empty()).then(|| println!("-> Description: {descr}"));
-        println!("-> WBS: {wbs}");
-        println!("-> Attendance: {attendance}");
-        println!("-> Date: {}", timestamp.format("%Y-%m-%d"));
-        println!("-> Time: {}", timestamp.format("%H:%M:%S"));
-    }
+    let timestamp = entry.time_stamp();
+    verbose_print_pretty! {
+        start_opts.verbose => [
+            "Description" => descr,
+            "Attendance" => attendance,
+            "WBS" => wbs,
+            "Date" => timestamp.format("%Y-%m-%d"),
+            "Time" => timestamp.format("%H:%M:%S"),
+        ]
+    };
     Ok(())
 }
 
 fn end_activity(config: &Config, end_opts: &opt::End) -> anyhow::Result<()> {
     let entry = ActivityEntry::new_end();
     println!("Stopped tracking time");
-    if end_opts.verbose {
-        let timestamp = entry.time_stamp();
-        println!("Date: {}", timestamp.format("%Y-%m-%d"));
-        println!("Time: {}", timestamp.format("%H:%M:%S"));
-    }
+
+    let timestamp = entry.time_stamp();
+    verbose_print_pretty!(
+        end_opts.verbose => [
+            "Date" => timestamp.format("%Y-%m-%d"),
+            "Time" => timestamp.format("%H:%M:%S"),
+        ]
+    );
     Ok(())
 }
 
