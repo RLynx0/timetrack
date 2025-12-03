@@ -70,7 +70,7 @@ fn load_or_create_config(custom_path: Option<&PathBuf>) -> anyhow::Result<Config
         None => &files::default_config_path()?,
         Some(p) => p,
     };
-    if fs::exists(&config_path)? {
+    if fs::exists(config_path)? {
         let config_str = fs::read_to_string(config_path)?;
         Ok(toml::from_str(&config_str)?)
     } else {
@@ -81,7 +81,7 @@ fn load_or_create_config(custom_path: Option<&PathBuf>) -> anyhow::Result<Config
         if let Some(p) = config_path.parent() {
             fs::create_dir_all(p)?;
         }
-        fs::write(&config_path, config_str)?;
+        fs::write(config_path, config_str)?;
         println!("Saved generated configuration to {config_path:?}");
         println!("\n--------\n");
         Ok(config)

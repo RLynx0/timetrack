@@ -1,9 +1,9 @@
 use std::{env, path::PathBuf};
 
-const FS_SCOPE_NAME: &'static str = "timetrack";
-const DEFAULT_CONFIG_FILENAME: &'static str = "config.toml";
-const ACTIVITY_FILE_NAME: &'static str = "activities";
-const ENTRY_FILE_NAME: &'static str = "entries";
+const FS_SCOPE_NAME: &str = "timetrack";
+const DEFAULT_CONFIG_FILENAME: &str = "config.toml";
+const ACTIVITY_FILE_NAME: &str = "activities";
+const ENTRY_FILE_NAME: &str = "entries";
 
 pub fn get_data_dir_path() -> anyhow::Result<PathBuf> {
     let mut path = get_xdg_data_home()?;
