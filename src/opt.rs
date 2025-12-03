@@ -79,8 +79,18 @@ pub struct RemoveActivity {
 }
 
 /// List all trackable activities
+///
+/// You can think of the activity hierarchy like your filesystem.
+/// In this context, this command is very similar to the unix ls command.
 #[derive(Debug, Clone, Parser)]
-pub struct ListActivities;
+pub struct ListActivities {
+    /// List contents of a given activity category
+    name: Option<String>,
+
+    /// Show contents of activity categories
+    #[clap(short, long)]
+    recursive: bool,
+}
 
 /// Generate output file for a specified time frame
 #[derive(Debug, Clone, Parser)]
