@@ -38,8 +38,9 @@ fn handle_ttr_command(opt: &Opt) -> Result<()> {
         opt::TtrCommand::Start(opts) => handle_start(&get_config(cfg_path)?, opts),
         opt::TtrCommand::Idle(opts) => handle_idle(&get_config(cfg_path)?, opts),
         opt::TtrCommand::End(opts) => end_activity(opts),
-        opt::TtrCommand::Activity(_) => todo!(),
+        opt::TtrCommand::Show(opts) => show_entries(opts),
         opt::TtrCommand::Generate(_) => todo!(),
+        opt::TtrCommand::Activity(_) => todo!(),
     }
 }
 
@@ -157,6 +158,11 @@ fn write_entry(entry: &ActivityEntry) -> Result<()> {
 
     writeln!(&mut file, "{entry}")?;
     Ok(())
+}
+
+fn show_entries(show_opts: &opt::Show) -> Result<()> {
+    println!("{show_opts:#?}");
+    todo!()
 }
 
 fn get_config(custom_path: Option<&PathBuf>) -> Result<Config> {

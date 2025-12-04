@@ -1,4 +1,6 @@
-use std::path::PathBuf;
+use std::{path::PathBuf, str::FromStr};
+
+pub mod last_value;
 
 pub use clap::{Parser, Subcommand};
 
@@ -24,10 +26,12 @@ pub enum TtrCommand {
     Idle(Idle),
     #[command()]
     End(End),
-    #[command(subcommand)]
-    Activity(ActivityCommand),
+    #[command()]
+    Show(Show),
     #[command()]
     Generate(Generate),
+    #[command(subcommand)]
+    Activity(ActivityCommand),
 }
 
 /// Edit or list trackable activities
@@ -95,6 +99,34 @@ pub struct End {
     pub verbose: bool,
 }
 
+/// Show latest tracked activity or activities
+#[derive(Debug, Clone, Parser)]
+pub struct Show {
+    /// Specify how many entries should be shown
+    ///
+    /// <n>                Show the last <n> entries
+    /// <n>h | <n>hours    Show entries in the last <n> hours
+    /// <n>m | <n>months   Show entries in the last <n> months
+    /// <n>y | <n>years    Show entries in the last <n> years
+    /// hour               Show entries in the current hour
+    /// month              Show entries in the current month
+    /// year               Show entries in the current year
+    #[clap(verbatim_doc_comment, short, long, default_value = "1")]
+    last: last_value::LastValue,
+}
+
+/// Generate output file for a specified time frame
+#[derive(Debug, Clone, Parser)]
+pub struct Generate {
+    /// Print to stdout instead of saving to file
+    #[clap(short, long)]
+    stdout: bool,
+
+    /// Save to custom filepath
+    #[clap(short, long)]
+    file_path: Option<String>,
+}
+
 /// Define a new trackable activity
 #[derive(Debug, Clone, Parser)]
 pub struct AddActivity {
@@ -130,16 +162,4 @@ pub struct ListActivities {
     /// Show contents of activity categories
     #[clap(short, long)]
     recursive: bool,
-}
-
-/// Generate output file for a specified time frame
-#[derive(Debug, Clone, Parser)]
-pub struct Generate {
-    /// Print to stdout instead of saving to file
-    #[clap(short, long)]
-    stdout: bool,
-
-    /// Save to custom filepath
-    #[clap(short, long)]
-    file_path: Option<String>,
 }
