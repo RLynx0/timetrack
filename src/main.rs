@@ -8,11 +8,16 @@ use std::{
     str::FromStr,
 };
 
+use chrono::Local;
 use clap::Parser;
 use color_eyre::eyre::Result;
 use rev_lines::RawRevLines;
 
-use crate::{config::Config, entry::ActivityEntry, opt::Opt};
+use crate::{
+    config::Config,
+    entry::ActivityEntry,
+    opt::{Opt, last_value::LastValue},
+};
 
 mod config;
 mod entry;
@@ -161,8 +166,32 @@ fn write_entry(entry: &ActivityEntry) -> Result<()> {
 }
 
 fn show_entries(show_opts: &opt::Show) -> Result<()> {
-    println!("{show_opts:#?}");
-    todo!()
+    if matches!(show_opts.last, LastValue::SingleEntries(1)) {
+        let entry = get_last_state_entry(&files::get_entry_file_path()?)?;
+        match entry {
+            None => println!("You have not recorded any data yet"),
+            Some(ActivityEntry::End(e)) => {
+                println!("You are not tracking any activity")
+            }
+            Some(ActivityEntry::Start(entry)) => {
+                println!(
+                    "Tracking activity \u{001B}[32m'{}'\u{001B}[0m",
+                    entry.name()
+                );
+
+                let delta = Local::now() - entry.time_stamp();
+                verbose_print_pretty! {
+                    true => [
+                        "Description" => entry.description(),
+                        "Attendance" => entry.attendance(),
+                        "WBS" => entry.wbs(),
+                        "Tracked for" => delta,
+                    ]
+                };
+            }
+        }
+    }
+    Ok(())
 }
 
 fn get_config(custom_path: Option<&PathBuf>) -> Result<Config> {

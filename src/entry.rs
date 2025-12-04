@@ -61,8 +61,8 @@ impl ActivityEntry {
     }
     pub fn time_stamp(&self) -> &DateTime<Local> {
         match self {
-            ActivityEntry::Start(start) => &start.time_stamp,
-            ActivityEntry::End(end) => &end.time_stamp,
+            ActivityEntry::Start(start) => start.time_stamp(),
+            ActivityEntry::End(end) => end.time_stamp(),
         }
     }
     pub fn attendance_type(&self) -> Option<&str> {
@@ -121,6 +121,11 @@ impl Display for ActivityEntry {
 pub struct ActivityEnd {
     time_stamp: DateTime<Local>,
 }
+impl ActivityEnd {
+    pub fn time_stamp(&self) -> &DateTime<Local> {
+        &self.time_stamp
+    }
+}
 
 #[derive(Debug, Clone)]
 pub struct ActivityStart {
@@ -131,8 +136,20 @@ pub struct ActivityStart {
     wbs: Rc<str>,
 }
 impl ActivityStart {
+    pub fn time_stamp(&self) -> &DateTime<Local> {
+        &self.time_stamp
+    }
+    pub fn name(&self) -> &str {
+        &self.activity_name
+    }
     pub fn attendance(&self) -> &str {
         &self.attendance_type
+    }
+    pub fn description(&self) -> &str {
+        &self.description
+    }
+    pub fn wbs(&self) -> &str {
+        &self.wbs
     }
 }
 

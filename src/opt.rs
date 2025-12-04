@@ -107,12 +107,10 @@ pub struct Show {
     /// <n>                Show the last <n> entries
     /// <n>h | <n>hours    Show entries in the last <n> hours
     /// <n>m | <n>months   Show entries in the last <n> months
-    /// <n>y | <n>years    Show entries in the last <n> years
     /// hour               Show entries in the current hour
     /// month              Show entries in the current month
-    /// year               Show entries in the current year
     #[clap(verbatim_doc_comment, short, long, default_value = "1")]
-    last: last_value::LastValue,
+    pub last: last_value::LastValue,
 }
 
 /// Generate output file for a specified time frame
