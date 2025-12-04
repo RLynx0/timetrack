@@ -50,6 +50,13 @@ pub struct Start {
     #[clap(default_value = BUILTIN_ACTIVITY_INTERN)]
     pub activity: String,
 
+    /// Set the attendance type of this entry
+    ///
+    /// Subsequent entries will keep using this attendance type by default
+    /// The default attendance type is defined by your config
+    #[clap(short, long, verbatim_doc_comment)]
+    pub attendance: Option<String>,
+
     /// Set a custom description for this entry
     #[clap(short, long)]
     pub description: Option<String>,
@@ -64,6 +71,13 @@ pub struct Start {
 /// This is an alias for `start Idle`
 #[derive(Debug, Clone, Parser)]
 pub struct Idle {
+    /// Set the attendance type of this entry
+    ///
+    /// Subsequent entries will keep using this attendance type by default
+    /// The default attendance type is defined by your config
+    #[clap(short, long, verbatim_doc_comment)]
+    pub attendance: Option<String>,
+
     /// Set a custom description for this entry
     #[clap(short, long)]
     pub description: Option<String>,
@@ -90,9 +104,10 @@ pub struct AddActivity {
 
 /// Remove a specified trackable activity
 ///
-/// Entries using this activity will still be valid,
-/// but you won't be able to create new ones with it.
+/// Entries using this activity will still be valid
+/// However, you won't be able to create new ones with it
 #[derive(Debug, Clone, Parser)]
+#[clap(verbatim_doc_comment)]
 pub struct RemoveActivity {
     /// The name of the activity to remove
     name: String,
@@ -104,9 +119,10 @@ pub struct RemoveActivity {
 
 /// List all trackable activities
 ///
-/// You can think of the activity hierarchy like your filesystem.
-/// In this context, this command is very similar to the unix ls command.
+/// You can think of the activity hierarchy like your filesystem
+/// In this context, this command is very similar to the unix ls command
 #[derive(Debug, Clone, Parser)]
+#[clap(verbatim_doc_comment)]
 pub struct ListActivities {
     /// List contents of a given activity category
     name: Option<String>,

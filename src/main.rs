@@ -60,10 +60,12 @@ fn start_activity(config: &Config, start_opts: &opt::Start) -> Result<()> {
     let activity_name = &start_opts.activity;
 
     let last_entry = get_last_state_entry(&files::get_entry_file_path()?)?;
-    let attendance = &match last_entry {
-        Some(ActivityEntry::Start(start_entry)) => start_entry.attendance().to_owned(),
-        _ => config.default_attendance.to_owned(),
-    };
+    let last_attendance = last_entry.as_ref().and_then(|e| e.attendance_type());
+    let attendance = start_opts
+        .attendance
+        .as_deref()
+        .or(last_attendance)
+        .unwrap_or(&config.default_attendance);
 
     let wbs = "I.03099999.99";
 
@@ -92,10 +94,12 @@ fn start_idle(config: &Config, idle_opts: &opt::Idle) -> Result<()> {
     let activity_name = BUILTIN_ACTIVITY_IDLE;
 
     let last_entry = get_last_state_entry(&files::get_entry_file_path()?)?;
-    let attendance = &match last_entry {
-        Some(ActivityEntry::Start(start_entry)) => start_entry.attendance().to_owned(),
-        _ => config.default_attendance.to_owned(),
-    };
+    let last_attendance = last_entry.as_ref().and_then(|e| e.attendance_type());
+    let attendance = idle_opts
+        .attendance
+        .as_deref()
+        .or(last_attendance)
+        .unwrap_or(&config.default_attendance);
 
     let wbs = IDLE_WBS_SENTINEL;
 

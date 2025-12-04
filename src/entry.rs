@@ -65,6 +65,12 @@ impl ActivityEntry {
             ActivityEntry::End(end) => &end.time_stamp,
         }
     }
+    pub fn attendance_type(&self) -> Option<&str> {
+        match self {
+            ActivityEntry::Start(activity_start) => Some(&activity_start.attendance_type),
+            ActivityEntry::End(activity_end) => None,
+        }
+    }
 }
 impl FromStr for ActivityEntry {
     type Err = ParseEntryError;
