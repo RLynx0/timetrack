@@ -9,6 +9,7 @@ use std::{
 };
 
 use clap::Parser;
+use color_eyre::eyre::Result;
 use rev_lines::RawRevLines;
 
 use crate::{config::Config, entry::ActivityEntry, opt::Opt};
@@ -31,7 +32,7 @@ fn main() {
     }
 }
 
-fn handle_ttr_command(opt: &Opt) -> anyhow::Result<()> {
+fn handle_ttr_command(opt: &Opt) -> Result<()> {
     let cfg_path = opt.config.as_ref();
     match &opt.command {
         opt::TtrCommand::Start(opts) => start_activity(&get_config(cfg_path)?, opts),
@@ -55,7 +56,7 @@ macro_rules! verbose_print_pretty {
     };
 }
 
-fn start_activity(config: &Config, start_opts: &opt::Start) -> anyhow::Result<()> {
+fn start_activity(config: &Config, start_opts: &opt::Start) -> Result<()> {
     let activity_name = &start_opts.activity;
 
     let last_entry = get_last_state_entry(&files::get_entry_file_path()?)?;
@@ -87,7 +88,7 @@ fn start_activity(config: &Config, start_opts: &opt::Start) -> anyhow::Result<()
     Ok(())
 }
 
-fn start_idle(config: &Config, idle_opts: &opt::Idle) -> anyhow::Result<()> {
+fn start_idle(config: &Config, idle_opts: &opt::Idle) -> Result<()> {
     let activity_name = BUILTIN_ACTIVITY_IDLE;
 
     let last_entry = get_last_state_entry(&files::get_entry_file_path()?)?;
@@ -119,7 +120,7 @@ fn start_idle(config: &Config, idle_opts: &opt::Idle) -> anyhow::Result<()> {
     Ok(())
 }
 
-fn end_activity(config: &Config, end_opts: &opt::End) -> anyhow::Result<()> {
+fn end_activity(config: &Config, end_opts: &opt::End) -> Result<()> {
     let entry = ActivityEntry::new_end();
     println!("Stopped tracking time");
 
@@ -133,7 +134,7 @@ fn end_activity(config: &Config, end_opts: &opt::End) -> anyhow::Result<()> {
     Ok(())
 }
 
-fn get_config(custom_path: Option<&PathBuf>) -> anyhow::Result<Config> {
+fn get_config(custom_path: Option<&PathBuf>) -> Result<Config> {
     let config_path = match custom_path {
         None => &files::default_config_path()?,
         Some(p) => p,
@@ -156,7 +157,7 @@ fn get_config(custom_path: Option<&PathBuf>) -> anyhow::Result<Config> {
     }
 }
 
-fn make_guided_config() -> anyhow::Result<Config> {
+fn make_guided_config() -> Result<Config> {
     let default = toml::from_str::<Config>(include_str!("./default_config.toml"))
         .expect("Default config must be valid");
 
@@ -184,7 +185,7 @@ fn make_guided_config() -> anyhow::Result<Config> {
     })
 }
 
-fn get_input_string(query: &str) -> anyhow::Result<String> {
+fn get_input_string(query: &str) -> Result<String> {
     let mut input = String::new();
     while input.trim().is_empty() {
         print!("{query}: ");
@@ -194,7 +195,7 @@ fn get_input_string(query: &str) -> anyhow::Result<String> {
     Ok(input.trim().into())
 }
 
-fn get_last_state_entry(path: &Path) -> anyhow::Result<Option<ActivityEntry>> {
+fn get_last_state_entry(path: &Path) -> Result<Option<ActivityEntry>> {
     if !fs::exists(path)? {
         return Ok(None);
     }
