@@ -35,75 +35,66 @@ fn main() {
 fn handle_ttr_command(opt: &Opt) -> Result<()> {
     let cfg_path = opt.config.as_ref();
     match &opt.command {
-        opt::TtrCommand::Start(opts) => start_activity(&get_config(cfg_path)?, opts),
-        opt::TtrCommand::Idle(opts) => start_idle(&get_config(cfg_path)?, opts),
+        opt::TtrCommand::Start(opts) => handle_start(&get_config(cfg_path)?, opts),
+        opt::TtrCommand::Idle(opts) => handle_idle(&get_config(cfg_path)?, opts),
         opt::TtrCommand::End(opts) => end_activity(&get_config(cfg_path)?, opts),
         opt::TtrCommand::Activity(_) => todo!(),
         opt::TtrCommand::Generate(_) => todo!(),
     }
 }
 
+fn handle_start(config: &Config, start_opts: &opt::Start) -> Result<()> {
+    start_activity(
+        config,
+        start_opts.verbose,
+        &start_opts.activity,
+        start_opts.attendance.as_deref(),
+        start_opts.description.as_deref(),
+    )
+}
+
+fn handle_idle(config: &Config, idle_opts: &opt::Idle) -> Result<()> {
+    start_activity(
+        config,
+        idle_opts.verbose,
+        BUILTIN_ACTIVITY_IDLE,
+        idle_opts.attendance.as_deref(),
+        idle_opts.description.as_deref(),
+    )
+}
+
 macro_rules! verbose_print_pretty {
     ($cond:expr => [$($k:expr => $v:expr,)+]) => {
         if $cond {
             $(
-                (!$v.to_string().trim().is_empty()).then(|| println!(
+                {
+                    let s = $v.to_string();
+                    let s = s.trim();
+                    (!s.is_empty()).then(|| println!(
                     "-> \u{001b}[34m{:12}\u{001b}[0m: {}",
-                    $k, $v
-                ));
+                    $k, $v));
+                }
             )+
         }
     };
 }
 
-fn start_activity(config: &Config, start_opts: &opt::Start) -> Result<()> {
-    let activity_name = &start_opts.activity;
-
+fn start_activity(
+    config: &Config,
+    verbose: bool,
+    activity_name: &str,
+    attendance: Option<&str>,
+    description: Option<&str>,
+) -> Result<()> {
     let last_entry = get_last_state_entry(&files::get_entry_file_path()?)?;
     let last_attendance = last_entry.as_ref().and_then(|e| e.attendance_type());
-    let attendance = start_opts
-        .attendance
-        .as_deref()
-        .or(last_attendance)
-        .unwrap_or(&config.default_attendance);
-
-    let wbs = "I.03099999.99";
-
-    let descr = match &start_opts.description {
-        Some(s) => s.replace("\t", "    ").replace("\n", " -- "),
-        None => String::new(),
-    };
-
-    let entry = ActivityEntry::new_start(activity_name, attendance, wbs, &descr);
-    println!("Started tracking activity \u{001B}[32m'{activity_name}'\u{001B}[0m");
-
-    let timestamp = entry.time_stamp();
-    verbose_print_pretty! {
-        start_opts.verbose => [
-            "Description" => descr,
-            "Attendance" => attendance,
-            "WBS" => wbs,
-            "Date" => timestamp.format("%Y-%m-%d"),
-            "Time" => timestamp.format("%H:%M:%S"),
-        ]
-    };
-    Ok(())
-}
-
-fn start_idle(config: &Config, idle_opts: &opt::Idle) -> Result<()> {
-    let activity_name = BUILTIN_ACTIVITY_IDLE;
-
-    let last_entry = get_last_state_entry(&files::get_entry_file_path()?)?;
-    let last_attendance = last_entry.as_ref().and_then(|e| e.attendance_type());
-    let attendance = idle_opts
-        .attendance
-        .as_deref()
+    let attendance = attendance
         .or(last_attendance)
         .unwrap_or(&config.default_attendance);
 
     let wbs = IDLE_WBS_SENTINEL;
 
-    let descr = match &idle_opts.description {
+    let descr = match &description {
         Some(s) => s.replace("\t", "    ").replace("\n", " -- "),
         None => String::new(),
     };
@@ -113,7 +104,7 @@ fn start_idle(config: &Config, idle_opts: &opt::Idle) -> Result<()> {
 
     let timestamp = entry.time_stamp();
     verbose_print_pretty! {
-        idle_opts.verbose => [
+        verbose => [
             "Description" => descr,
             "Attendance" => attendance,
             "WBS" => wbs,
