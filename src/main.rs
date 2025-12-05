@@ -3,7 +3,7 @@
 use std::{
     fs,
     io::{Write, stdin, stdout},
-    path::{Path, PathBuf},
+    path::Path,
     process::exit,
     str::FromStr,
 };
@@ -38,10 +38,9 @@ fn main() {
 }
 
 fn handle_ttr_command(opt: &Opt) -> Result<()> {
-    let cfg_path = opt.config.as_ref();
     match &opt.command {
-        opt::TtrCommand::Start(opts) => handle_start(&get_config(cfg_path)?, opts),
-        opt::TtrCommand::Idle(opts) => handle_idle(&get_config(cfg_path)?, opts),
+        opt::TtrCommand::Start(opts) => handle_start(opts),
+        opt::TtrCommand::Idle(opts) => handle_idle(opts),
         opt::TtrCommand::End(opts) => end_activity(opts),
         opt::TtrCommand::Show(opts) => show_entries(opts),
         opt::TtrCommand::Generate(_) => todo!(),
@@ -49,9 +48,9 @@ fn handle_ttr_command(opt: &Opt) -> Result<()> {
     }
 }
 
-fn handle_start(config: &Config, start_opts: &opt::Start) -> Result<()> {
+fn handle_start(start_opts: &opt::Start) -> Result<()> {
     start_activity(
-        config,
+        &get_config()?,
         start_opts.verbose,
         &start_opts.activity,
         start_opts.attendance.as_deref(),
@@ -59,9 +58,9 @@ fn handle_start(config: &Config, start_opts: &opt::Start) -> Result<()> {
     )
 }
 
-fn handle_idle(config: &Config, idle_opts: &opt::Idle) -> Result<()> {
+fn handle_idle(idle_opts: &opt::Idle) -> Result<()> {
     start_activity(
-        config,
+        &get_config()?,
         idle_opts.verbose,
         BUILTIN_ACTIVITY_IDLE,
         idle_opts.attendance.as_deref(),
@@ -170,7 +169,7 @@ fn show_entries(show_opts: &opt::Show) -> Result<()> {
         let entry = get_last_state_entry(&files::get_entry_file_path()?)?;
         match entry {
             None => println!("You have not recorded any data yet"),
-            Some(ActivityEntry::End(e)) => {
+            Some(ActivityEntry::End(_)) => {
                 println!("You are not tracking any activity")
             }
             Some(ActivityEntry::Start(entry)) => {
@@ -194,12 +193,9 @@ fn show_entries(show_opts: &opt::Show) -> Result<()> {
     Ok(())
 }
 
-fn get_config(custom_path: Option<&PathBuf>) -> Result<Config> {
-    let config_path = match custom_path {
-        None => &files::default_config_path()?,
-        Some(p) => p,
-    };
-    if fs::exists(config_path)? {
+fn get_config() -> Result<Config> {
+    let config_path = files::get_main_config_path()?;
+    if fs::exists(&config_path)? {
         let config_str = fs::read_to_string(config_path)?;
         Ok(toml::from_str(&config_str)?)
     } else {
@@ -210,7 +206,7 @@ fn get_config(custom_path: Option<&PathBuf>) -> Result<Config> {
         if let Some(p) = config_path.parent() {
             fs::create_dir_all(p)?;
         }
-        fs::write(config_path, config_str)?;
+        fs::write(&config_path, config_str)?;
         println!("Saved generated configuration to {config_path:?}");
         println!("\n--------\n");
         Ok(config)

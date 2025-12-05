@@ -12,10 +12,6 @@ use crate::BUILTIN_ACTIVITY_INTERN;
 pub struct Opt {
     #[command(subcommand)]
     pub command: TtrCommand,
-
-    /// Specify custom config path
-    #[clap(short, long)]
-    pub config: Option<PathBuf>,
 }
 
 #[derive(Debug, Clone, Subcommand)]
