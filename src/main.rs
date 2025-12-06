@@ -18,6 +18,7 @@ use crate::{
     config::Config,
     entry::ActivityEntry,
     opt::{Opt, last_value::LastValue},
+    table::Table,
 };
 
 mod config;
@@ -25,6 +26,7 @@ mod entry;
 mod files;
 mod format_string;
 mod opt;
+mod table;
 
 const IDLE_WBS_SENTINEL: &str = "Idle";
 const BUILTIN_ACTIVITY_IDLE: &str = "Idle";
@@ -256,12 +258,12 @@ fn show_multiple_entries(lval: &LastValue) -> Result<()> {
 }
 
 fn print_entry_table(entries: impl IntoIterator<Item = ActivityEntry>) {
-    let mut col_time: Vec<Rc<str>> = vec!["Timestamp".into()];
-    let mut col_name: Vec<Rc<str>> = vec!["Activity".into()];
-    let mut col_attendance: Vec<Rc<str>> = vec!["Attendance".into()];
-    let mut col_wbs: Vec<Rc<str>> = vec!["WBS".into()];
-    let mut col_description: Vec<Rc<str>> = vec!["Description".into()];
-
+    let mut col_time: Vec<Rc<str>> = Vec::new();
+    let mut col_name: Vec<Rc<str>> = Vec::new();
+    let mut col_attendance: Vec<Rc<str>> = Vec::new();
+    let mut col_wbs: Vec<Rc<str>> = Vec::new();
+    let mut col_description: Vec<Rc<str>> = Vec::new();
+    let none_value: Rc<str> = "--".into();
     for entry in entries {
         col_time.push(
             entry
@@ -275,70 +277,29 @@ fn print_entry_table(entries: impl IntoIterator<Item = ActivityEntry>) {
                 col_name.push(activity_start.name().into());
                 col_attendance.push(activity_start.attendance().into());
                 col_wbs.push(activity_start.wbs().into());
-                col_description.push(
-                    match activity_start.description() {
-                        "" => "--",
-                        s => s,
-                    }
-                    .into(),
-                );
+                col_description.push(match activity_start.description() {
+                    "" => none_value.clone(),
+                    s => s.into(),
+                });
             }
             ActivityEntry::End(_) => {
-                col_name.push("--".into());
-                col_attendance.push("--".into());
-                col_wbs.push("--".into());
-                col_description.push("--".into());
+                col_name.push(none_value.clone());
+                col_attendance.push(none_value.clone());
+                col_wbs.push(none_value.clone());
+                col_description.push(none_value.clone());
             }
         }
     }
 
-    let time_width = col_time.iter().map(|s| s.chars().count()).max();
-    let name_width = col_name.iter().map(|s| s.chars().count()).max();
-    let attendance_width = col_attendance.iter().map(|s| s.chars().count()).max();
-    let wbs_width = col_wbs.iter().map(|s| s.chars().count()).max();
-    let description_width = col_description.iter().map(|s| s.chars().count()).max();
+    let table = Table::from([
+        ("Timestamp", col_time),
+        ("Activity", col_name),
+        ("Attendance", col_attendance),
+        ("WBS", col_wbs),
+        ("Description", col_description),
+    ]);
 
-    println!(
-        "| {0}{1}{11}{2} | {0}{3}{11}{4} | {0}{5}{11}{6} | {0}{7}{11}{8} | {0}{9}{11}{10} |",
-        ANSII_BLUE,
-        col_time[0],
-        " ".repeat(time_width.unwrap_or_default() - col_time[0].chars().count()),
-        col_name[0],
-        " ".repeat(name_width.unwrap_or_default() - col_name[0].chars().count()),
-        col_attendance[0],
-        " ".repeat(attendance_width.unwrap_or_default() - col_attendance[0].chars().count()),
-        col_wbs[0],
-        " ".repeat(wbs_width.unwrap_or_default() - col_wbs[0].chars().count()),
-        col_description[0],
-        " ".repeat(description_width.unwrap_or_default() - col_description[0].chars().count()),
-        ANSII_RESET,
-    );
-    println!(
-        "|-{}-|-{}-|-{}-|-{}-|-{}-|",
-        "-".repeat(time_width.unwrap_or_default()),
-        "-".repeat(name_width.unwrap_or_default()),
-        "-".repeat(attendance_width.unwrap_or_default()),
-        "-".repeat(wbs_width.unwrap_or_default()),
-        "-".repeat(description_width.unwrap_or_default()),
-    );
-
-    for ((((t, n), a), w), d) in col_time
-        .iter()
-        .zip(col_name)
-        .zip(col_attendance)
-        .zip(col_wbs)
-        .zip(col_description)
-        .skip(1)
-    {
-        println!(
-            "| {t}{} | {n}{} | {a}{} | {w}{} | {d}{} |",
-            " ".repeat(time_width.unwrap_or_default() - t.chars().count()),
-            " ".repeat(name_width.unwrap_or_default() - n.chars().count()),
-            " ".repeat(attendance_width.unwrap_or_default() - a.chars().count()),
-            " ".repeat(wbs_width.unwrap_or_default() - w.chars().count()),
-            " ".repeat(description_width.unwrap_or_default() - d.chars().count()),
-        )
-    }
+    println!("{table}");
 }
 
 fn get_config() -> Result<Config> {
