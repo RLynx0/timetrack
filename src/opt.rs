@@ -1,10 +1,8 @@
-use std::{path::PathBuf, str::FromStr};
-
 pub mod last_value;
 
 pub use clap::{Parser, Subcommand};
 
-use crate::BUILTIN_ACTIVITY_INTERN;
+use crate::BUILTIN_ACTIVITY_IDLE;
 
 #[derive(Debug, Clone, Parser)]
 #[command(author, version, about, long_about = None)]
@@ -18,8 +16,6 @@ pub struct Opt {
 pub enum TtrCommand {
     #[command()]
     Start(Start),
-    #[command()]
-    Idle(Idle),
     #[command()]
     End(End),
     #[command()]
@@ -47,30 +43,9 @@ pub enum ActivityCommand {
 #[derive(Debug, Clone, Parser)]
 pub struct Start {
     /// Start tracking time for this activity
-    #[clap(default_value = BUILTIN_ACTIVITY_INTERN)]
+    #[clap(default_value = BUILTIN_ACTIVITY_IDLE)]
     pub activity: String,
 
-    /// Set the attendance type of this entry
-    ///
-    /// Subsequent entries will keep using this attendance type by default
-    /// The default attendance type is defined by your config
-    #[clap(short, long, verbatim_doc_comment)]
-    pub attendance: Option<String>,
-
-    /// Set a custom description for this entry
-    #[clap(short, long)]
-    pub description: Option<String>,
-
-    /// Pollute the terminal with output
-    #[clap(short, long)]
-    pub verbose: bool,
-}
-
-/// Start tracking time for the builtin `Idle` activity
-///
-/// This is an alias for `start Idle`
-#[derive(Debug, Clone, Parser)]
-pub struct Idle {
     /// Set the attendance type of this entry
     ///
     /// Subsequent entries will keep using this attendance type by default

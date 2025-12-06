@@ -27,7 +27,6 @@ mod opt;
 
 const IDLE_WBS_SENTINEL: &str = "Idle";
 const BUILTIN_ACTIVITY_IDLE: &str = "Idle";
-const BUILTIN_ACTIVITY_INTERN: &str = "Intern";
 
 fn main() {
     let opt = Opt::parse();
@@ -40,32 +39,11 @@ fn main() {
 fn handle_ttr_command(opt: &Opt) -> Result<()> {
     match &opt.command {
         opt::TtrCommand::Start(opts) => handle_start(opts),
-        opt::TtrCommand::Idle(opts) => handle_idle(opts),
         opt::TtrCommand::End(opts) => end_activity(opts),
         opt::TtrCommand::Show(opts) => show_entries(opts),
         opt::TtrCommand::Generate(_) => todo!(),
         opt::TtrCommand::Activity(_) => todo!(),
     }
-}
-
-fn handle_start(start_opts: &opt::Start) -> Result<()> {
-    start_activity(
-        &get_config()?,
-        start_opts.verbose,
-        &start_opts.activity,
-        start_opts.attendance.as_deref(),
-        start_opts.description.as_deref(),
-    )
-}
-
-fn handle_idle(idle_opts: &opt::Idle) -> Result<()> {
-    start_activity(
-        &get_config()?,
-        idle_opts.verbose,
-        BUILTIN_ACTIVITY_IDLE,
-        idle_opts.attendance.as_deref(),
-        idle_opts.description.as_deref(),
-    )
 }
 
 macro_rules! verbose_print_pretty {
@@ -84,32 +62,32 @@ macro_rules! verbose_print_pretty {
     };
 }
 
-fn start_activity(
-    config: &Config,
-    verbose: bool,
-    activity_name: &str,
-    attendance: Option<&str>,
-    description: Option<&str>,
-) -> Result<()> {
-    let last_entry = get_last_state_entry(&files::get_entry_file_path()?)?;
-    let last_attendance = last_entry.as_ref().and_then(|e| e.attendance_type());
-    let attendance = attendance
-        .or(last_attendance)
-        .unwrap_or(&config.default_attendance);
+fn handle_start(start_opts: &opt::Start) -> Result<()> {
+    let config = &get_config()?;
+    let activity_name: &str = &start_opts.activity;
 
     let wbs = resolve_wbs(activity_name)?;
 
-    let description = match &description {
-        Some(s) => s.replace("\t", "    ").replace("\n", " -- "),
-        None => String::new(),
-    };
+    let last_entry = get_last_state_entry(&files::get_entry_file_path()?)?;
+    let last_attendance = last_entry.as_ref().and_then(|e| e.attendance_type());
+    let attendance = start_opts
+        .attendance
+        .as_deref()
+        .or(last_attendance)
+        .unwrap_or(&config.default_attendance);
+
+    let description = start_opts
+        .description
+        .as_deref()
+        .map(sanitize_description)
+        .unwrap_or_default();
 
     let entry = ActivityEntry::new_start(activity_name, attendance, &wbs, &description);
     println!("Started tracking activity \u{001B}[32m'{activity_name}'\u{001B}[0m");
 
     let timestamp = entry.time_stamp();
     verbose_print_pretty! {
-        verbose => [
+        start_opts.verbose => [
             "Description" => description,
             "Attendance" => attendance,
             "WBS" => wbs,
@@ -131,6 +109,10 @@ fn resolve_wbs(activity_name: &str) -> Result<String> {
     ))
 }
 
+fn sanitize_description(description: &str) -> String {
+    description.replace("\t", "    ").replace("\n", " -- ")
+}
+
 fn end_activity(end_opts: &opt::End) -> Result<()> {
     let entry = ActivityEntry::new_end();
     println!("Stopped tracking time");
@@ -149,9 +131,10 @@ fn end_activity(end_opts: &opt::End) -> Result<()> {
 fn write_entry(entry: &ActivityEntry) -> Result<()> {
     let path = files::get_entry_file_path()?;
     if !fs::exists(&path)?
-        && let Some(p) = path.parent() {
-            fs::create_dir_all(p)?
-        }
+        && let Some(p) = path.parent()
+    {
+        fs::create_dir_all(p)?
+    }
 
     let mut file = fs::OpenOptions::new()
         .create(true)
