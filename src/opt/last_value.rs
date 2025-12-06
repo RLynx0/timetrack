@@ -21,6 +21,9 @@ impl FromStr for LastValue {
             _ => (),
         }
         let (postfix, number) = parse_number(s).map_err(|e| format_err!("Invalid number: {e}"))?;
+        if number < 1 {
+            return Err(format_err!("Must be a positive number"));
+        }
         match postfix.to_lowercase().as_str() {
             "" => Ok(LastValue::SingleEntries(number)),
             "h" | "hour" | "hours" => Ok(LastValue::Hours(number)),

@@ -9,7 +9,7 @@ use std::{
     str::FromStr,
 };
 
-use chrono::Local;
+use chrono::{DateTime, Datelike, Local, TimeDelta, Timelike};
 use clap::Parser;
 use color_eyre::eyre::Result;
 use rev_lines::RawRevLines;
@@ -198,12 +198,53 @@ fn show_last_entry() -> Result<()> {
 fn show_multiple_entries(lval: &LastValue) -> Result<()> {
     let reversed_entries = match lval {
         LastValue::SingleEntries(n) => get_last_n_entries(&files::get_entry_file_path()?, *n)?,
-        LastValue::Hours(_) => todo!(),
-        LastValue::Days(_) => todo!(),
-        LastValue::Months(_) => todo!(),
+        LastValue::Hours(h) => {
+            let start_time = Local::now()
+                .with_minute(0)
+                .unwrap()
+                .with_second(0)
+                .unwrap()
+                .with_nanosecond(0)
+                .unwrap()
+                - TimeDelta::hours(*h as i64 - 1);
+            get_entries_since(&files::get_entry_file_path()?, &start_time)?
+        }
+        LastValue::Days(d) => {
+            let start_time = Local::now()
+                .with_hour(0)
+                .unwrap()
+                .with_minute(0)
+                .unwrap()
+                .with_second(0)
+                .unwrap()
+                .with_nanosecond(0)
+                .unwrap()
+                - TimeDelta::days(*d as i64 - 1);
+            get_entries_since(&files::get_entry_file_path()?, &start_time)?
+        }
+        LastValue::Months(m) => {
+            let start_time = Local::now()
+                .with_day(1)
+                .unwrap()
+                .with_hour(0)
+                .unwrap()
+                .with_minute(0)
+                .unwrap()
+                .with_second(0)
+                .unwrap()
+                .with_nanosecond(0)
+                .unwrap();
+            // TODO: subtract m months
+            get_entries_since(&files::get_entry_file_path()?, &start_time)?
+        }
     };
 
-    print_entry_table(reversed_entries.into_iter().rev());
+    if reversed_entries.is_empty() {
+        println!("You have not recorded any data yet");
+    } else {
+        print_entry_table(reversed_entries.into_iter().rev());
+    }
+
     Ok(())
 }
 
@@ -235,7 +276,7 @@ fn print_entry_table(entries: impl IntoIterator<Item = ActivityEntry>) {
                     .into(),
                 );
             }
-            ActivityEntry::End(activity_end) => {
+            ActivityEntry::End(_) => {
                 col_name.push("--".into());
                 col_attendance.push("--".into());
                 col_wbs.push("--".into());
@@ -353,17 +394,34 @@ fn get_last_entry(path: &Path) -> Result<Option<ActivityEntry>> {
     get_last_n_entries(path, 1).map(|v| v.into_iter().next())
 }
 
-/// Fetches the last `count` entries from a path in reversed order
+/// Fetch the last `count` entries from `path` in reversed order
 fn get_last_n_entries(path: &Path, count: usize) -> Result<Vec<ActivityEntry>> {
     if !fs::exists(path)? {
         return Ok(Vec::new());
     }
     let file = fs::File::open(path)?;
-    let mut rev_lines = RawRevLines::new(file);
-    rev_lines
+    RawRevLines::new(file)
         .take(count)
         .map(entry_from_byte_result)
         .collect::<Result<Vec<_>>>()
+}
+
+/// Fetch entries since `start_time` from `path` in reversed order
+fn get_entries_since(path: &Path, start_time: &DateTime<Local>) -> Result<Vec<ActivityEntry>> {
+    if !fs::exists(path)? {
+        return Ok(Vec::new());
+    }
+    let mut entries = Vec::new();
+    let file = fs::File::open(path)?;
+    for line in RawRevLines::new(file) {
+        let entry = entry_from_byte_result(line)?;
+        if entry.time_stamp() < start_time {
+            break;
+        }
+        entries.push(entry);
+    }
+
+    Ok(entries)
 }
 
 fn entry_from_byte_result(
