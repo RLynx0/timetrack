@@ -83,7 +83,13 @@ fn handle_start(start_opts: &opt::Start) -> Result<()> {
         .unwrap_or_default();
 
     let entry = ActivityEntry::new_start(activity_name, attendance, &wbs, &description);
-    println!("Started tracking activity \u{001B}[32m'{activity_name}'\u{001B}[0m");
+    write_entry(&entry)?;
+
+    if let Some(ActivityEntry::Start(last_start)) = last_entry.as_ref() {
+        let last_name = last_start.name();
+        println!("Stopped tracking \u{001B}[31m'{last_name}'\u{001b}[0m");
+    }
+    println!("Started tracking \u{001B}[32m'{activity_name}'\u{001B}[0m");
 
     let timestamp = entry.time_stamp();
     verbose_print_pretty! {
@@ -96,7 +102,7 @@ fn handle_start(start_opts: &opt::Start) -> Result<()> {
         ]
     };
 
-    write_entry(&entry)
+    Ok(())
 }
 
 fn resolve_wbs(activity_name: &str) -> Result<String> {
@@ -114,9 +120,16 @@ fn sanitize_description(description: &str) -> String {
 }
 
 fn end_activity(end_opts: &opt::End) -> Result<()> {
-    let entry = ActivityEntry::new_end();
-    println!("Stopped tracking time");
+    let last_entry = get_last_state_entry(&files::get_entry_file_path()?)?;
 
+    if let Some(ActivityEntry::Start(last_start)) = last_entry.as_ref() {
+        let last_name = last_start.name();
+        println!("Stopped tracking activity \u{001B}[31m'{last_name}'\u{001b}[0m");
+    } else {
+        println!("Stopped tracking time");
+    }
+
+    let entry = ActivityEntry::new_end();
     let timestamp = entry.time_stamp();
     verbose_print_pretty!(
         end_opts.verbose => [
