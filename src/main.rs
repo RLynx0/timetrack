@@ -197,7 +197,9 @@ fn show_last_entry() -> Result<()> {
 
 fn show_multiple_entries(lval: &LastValue) -> Result<()> {
     let reversed_entries = match lval {
-        LastValue::SingleEntries(n) => get_last_n_entries(&files::get_entry_file_path()?, *n)?,
+        LastValue::SingleEntries(n) => {
+            get_last_n_entries(&files::get_entry_file_path()?, *n as usize)?
+        }
         LastValue::Hours(h) => {
             let start_time = Local::now()
                 .with_minute(0)
@@ -206,7 +208,7 @@ fn show_multiple_entries(lval: &LastValue) -> Result<()> {
                 .unwrap()
                 .with_nanosecond(0)
                 .unwrap()
-                - TimeDelta::hours(*h as i64 - 1);
+                - TimeDelta::hours(*h);
             get_entries_since(&files::get_entry_file_path()?, &start_time)?
         }
         LastValue::Days(d) => {
@@ -219,7 +221,7 @@ fn show_multiple_entries(lval: &LastValue) -> Result<()> {
                 .unwrap()
                 .with_nanosecond(0)
                 .unwrap()
-                - TimeDelta::days(*d as i64 - 1);
+                - TimeDelta::days(*d);
             get_entries_since(&files::get_entry_file_path()?, &start_time)?
         }
         LastValue::Months(m) => {
