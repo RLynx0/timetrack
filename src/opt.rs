@@ -103,6 +103,13 @@ pub struct Generate {
 pub struct AddActivity {
     /// The name of the new activity
     name: String,
+
+    /// The wbs to use for this activity
+    wbs: String,
+
+    /// The default description for this activity
+    #[clap(short, long)]
+    description: Option<String>,
 }
 
 /// Remove a specified trackable activity
