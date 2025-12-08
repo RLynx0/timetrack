@@ -301,7 +301,12 @@ fn print_entry_table(entries: impl IntoIterator<Item = ActivityEntry>) {
         ("Description", col_description),
     ]);
 
-    println!("{table}");
+    println!(
+        "{}",
+        table.to_string_with_options(table::PrintOptions {
+            chars: table::CharOptions::rounded()
+        })
+    );
 }
 
 fn open_entry_file(opts: &opt::Edit) -> Result<()> {
