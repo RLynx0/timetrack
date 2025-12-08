@@ -172,15 +172,16 @@ fn write_entry(entry: &ActivityEntry) -> Result<()> {
 
 fn show_entries(show_opts: &opt::Show) -> Result<()> {
     match &show_opts.last {
-        ActivityQuantity::SingleEntries(1) => show_current_entry(),
-        lval => show_multiple_entries(lval),
+        ActivityQuantity::SingleEntries(1) => show_current_entry(show_opts),
+        lval => show_multiple_entries(show_opts, lval),
     }
 }
 
-fn show_current_entry() -> Result<()> {
+fn show_current_entry(show_opts: &opt::Show) -> Result<()> {
     let entry = get_last_entry(&files::get_entry_file_path()?)?;
     match entry {
         None => println!("You have not recorded any data yet"),
+        Some(entry) if show_opts.raw => println!("{entry}"),
         Some(ActivityEntry::End(_)) => {
             println!("You are not tracking any activity")
         }
@@ -230,7 +231,7 @@ fn format_time_delta(delta: &TimeDelta) -> String {
     out
 }
 
-fn show_multiple_entries(lval: &ActivityQuantity) -> Result<()> {
+fn show_multiple_entries(show_opts: &opt::Show, lval: &ActivityQuantity) -> Result<()> {
     let reversed_entries = match lval {
         ActivityQuantity::SingleEntries(n) => {
             get_last_n_entries(&files::get_entry_file_path()?, *n as usize)?
@@ -293,6 +294,10 @@ fn show_multiple_entries(lval: &ActivityQuantity) -> Result<()> {
 
     if reversed_entries.is_empty() {
         println!("You have not recorded any data yet");
+    } else if show_opts.raw {
+        for entry in reversed_entries.iter().rev() {
+            println!("{entry}");
+        }
     } else {
         print_entry_table(reversed_entries.into_iter().rev());
     }

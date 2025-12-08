@@ -87,6 +87,10 @@ pub struct Show {
     /// month              Show activity from the current month
     #[clap(verbatim_doc_comment, short, long, default_value = "1")]
     pub last: activity_quantity::ActivityQuantity,
+
+    /// Print raw activity entries instead of a table
+    #[clap(short, long)]
+    pub raw: bool,
 }
 
 /// Open the activity log in an editor
