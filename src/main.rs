@@ -19,7 +19,7 @@ use crate::{
     entry::ActivityEntry,
     files::get_entry_file_path,
     opt::{Opt, last_value::LastValue},
-    table::Table,
+    table::{ColorOptions, Table},
 };
 
 mod config;
@@ -303,8 +303,12 @@ fn print_entry_table(entries: impl IntoIterator<Item = ActivityEntry>) {
 
     println!(
         "{}",
-        table.to_string_with_options(table::PrintOptions {
-            chars: table::CharOptions::rounded()
+        table.to_string_with_options(&table::PrintOptions {
+            chars: table::CharOptions::rounded(),
+            colors: Some(ColorOptions {
+                headers: table::AnsiiColor::Blue,
+                lines: table::AnsiiColor::None
+            })
         })
     );
 }

@@ -1,8 +1,41 @@
 use std::fmt::Display;
 
+#[derive(Clone, Debug, Default)]
 pub struct PrintOptions {
+    pub colors: Option<ColorOptions>,
     pub chars: CharOptions,
 }
+#[derive(Clone, Debug, Default)]
+pub struct ColorOptions {
+    pub headers: AnsiiColor,
+    pub lines: AnsiiColor,
+}
+#[derive(Clone, Debug, Default)]
+pub enum AnsiiColor {
+    #[default]
+    None,
+    Red,
+    Yellow,
+    Green,
+    Cyan,
+    Blue,
+    Magenta,
+}
+impl Display for AnsiiColor {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let ansii_code = match self {
+            AnsiiColor::None => "0",
+            AnsiiColor::Red => "31",
+            AnsiiColor::Yellow => "33",
+            AnsiiColor::Green => "32",
+            AnsiiColor::Cyan => "35",
+            AnsiiColor::Blue => "34",
+            AnsiiColor::Magenta => "36",
+        };
+        write!(f, "\u{001b}[{ansii_code}m")
+    }
+}
+#[derive(Clone, Debug)]
 pub struct CharOptions {
     caps: Option<CapOptions>,
     v: char,
@@ -11,6 +44,7 @@ pub struct CharOptions {
     vl: char,
     hv: char,
 }
+#[derive(Clone, Debug)]
 struct CapOptions {
     dr: char,
     dl: char,
@@ -65,6 +99,11 @@ impl CharOptions {
         }
     }
 }
+impl Default for CharOptions {
+    fn default() -> Self {
+        Self::ascii_markdown()
+    }
+}
 
 pub struct Table<K, V> {
     keys: Vec<K>,
@@ -75,8 +114,8 @@ where
     K: Display,
     V: Display,
 {
-    pub fn to_string_with_options(&self, print_options: PrintOptions) -> String {
-        let copt = print_options.chars;
+    pub fn to_string_with_options(&self, print_options: &PrintOptions) -> String {
+        let copt = &print_options.chars;
         let mut out = String::new();
         let mut widths = Vec::new();
         for (i, k) in self.keys.iter().enumerate() {
@@ -89,7 +128,17 @@ where
             widths.push(width);
         }
 
+        let (c_header, c_line, c_reset) = match &print_options.colors {
+            Some(c) => (
+                c.headers.to_string(),
+                c.lines.to_string(),
+                AnsiiColor::None.to_string(),
+            ),
+            None => (String::new(), String::new(), String::new()),
+        };
+
         // Conditionally print top table cap
+        out.push_str(&c_line);
         if let Some(co) = &copt.caps {
             for (i, w) in widths.iter().enumerate() {
                 out.push(if i == 0 { co.dr } else { co.hd });
@@ -104,7 +153,7 @@ where
         for (k, w) in self.keys.iter().zip(&widths) {
             let k = k.to_string();
             let space = " ".repeat(w - k.chars().count());
-            out.push_str(&format!(" {k}{space} {}", copt.v))
+            out.push_str(&format!(" {c_header}{k}{space} {c_line}{}", copt.v));
         }
         out.push('\n');
 
@@ -114,6 +163,7 @@ where
             out.push_str(&copt.h.to_string().repeat(*w + 2));
         }
         out.push(copt.vl);
+        out.push_str(&c_reset);
 
         // Print table rows
         let complete_rows = self
@@ -124,11 +174,12 @@ where
             .unwrap_or_default();
         for r in 0..complete_rows {
             out.push('\n');
+            out.push_str(&c_line);
             out.push(copt.v);
             for (i, width) in widths.iter().enumerate() {
                 let v = self.columns[i][r].to_string();
                 let space = " ".repeat(width - v.chars().count());
-                out.push_str(&format!(" {v}{space} {}", copt.v));
+                out.push_str(&format!(" {c_reset}{v}{space} {c_line}{}", copt.v));
             }
         }
 
@@ -142,6 +193,7 @@ where
             out.push(co.ul);
         }
 
+        out.push_str(&c_reset);
         out
     }
 }
@@ -169,12 +221,7 @@ where
     V: Display,
 {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(
-            f,
-            "{}",
-            self.to_string_with_options(PrintOptions {
-                chars: CharOptions::ascii_markdown()
-            })
-        )
+        let opts = PrintOptions::default();
+        write!(f, "{}", self.to_string_with_options(&opts))
     }
 }
