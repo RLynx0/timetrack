@@ -172,12 +172,12 @@ fn write_entry(entry: &ActivityEntry) -> Result<()> {
 
 fn show_entries(show_opts: &opt::Show) -> Result<()> {
     match &show_opts.last {
-        LastValue::SingleEntries(1) => show_last_entry(),
+        LastValue::SingleEntries(1) => show_current_entry(),
         lval => show_multiple_entries(lval),
     }
 }
 
-fn show_last_entry() -> Result<()> {
+fn show_current_entry() -> Result<()> {
     let entry = get_last_entry(&files::get_entry_file_path()?)?;
     match entry {
         None => println!("You have not recorded any data yet"),
@@ -196,12 +196,38 @@ fn show_last_entry() -> Result<()> {
                     "Description" => entry.description(),
                     "Attendance" => entry.attendance(),
                     "WBS" => entry.wbs(),
-                    "Tracked for" => delta,
+                    "Tracked for" => format_time_delta(&delta),
                 ]
             };
         }
     }
     Ok(())
+}
+
+fn format_time_delta(delta: &TimeDelta) -> String {
+    let mut out = String::new();
+    let days = delta.num_days();
+    if days > 0 {
+        out.push_str(&format!("{days}d "))
+    }
+
+    let rem = *delta - TimeDelta::days(days);
+    let hours = rem.num_hours();
+    if hours > 0 {
+        out.push_str(&format!("{hours}h "))
+    }
+
+    let rem = rem - TimeDelta::hours(hours);
+    let minutes = rem.num_minutes();
+    if minutes > 0 {
+        out.push_str(&format!("{minutes}m "))
+    }
+
+    let rem = rem - TimeDelta::minutes(minutes);
+    let seconds = rem.num_seconds();
+    out.push_str(&format!("{seconds}s"));
+
+    out
 }
 
 fn show_multiple_entries(lval: &LastValue) -> Result<()> {
@@ -260,20 +286,17 @@ fn show_multiple_entries(lval: &LastValue) -> Result<()> {
 }
 
 fn print_entry_table(entries: impl IntoIterator<Item = ActivityEntry>) {
-    let mut col_time: Vec<Rc<str>> = Vec::new();
+    let mut col_date: Vec<Rc<str>> = Vec::new();
+    let mut col_start: Vec<Rc<str>> = Vec::new();
     let mut col_name: Vec<Rc<str>> = Vec::new();
     let mut col_attendance: Vec<Rc<str>> = Vec::new();
     let mut col_wbs: Vec<Rc<str>> = Vec::new();
     let mut col_description: Vec<Rc<str>> = Vec::new();
     let none_value: Rc<str> = "--".into();
     for entry in entries {
-        col_time.push(
-            entry
-                .time_stamp()
-                .format("%Y-%m-%d %H:%M:%S")
-                .to_string()
-                .into(),
-        );
+        let timestamp = entry.time_stamp();
+        col_date.push(timestamp.format("%Y-%m-%d").to_string().into());
+        col_start.push(timestamp.format("%H:%M:%S").to_string().into());
         match entry {
             ActivityEntry::Start(activity_start) => {
                 col_name.push(activity_start.name().into());
@@ -294,7 +317,8 @@ fn print_entry_table(entries: impl IntoIterator<Item = ActivityEntry>) {
     }
 
     let table = Table::from([
-        ("Timestamp", col_time),
+        ("Date", col_date),
+        ("Start", col_start),
         ("Activity", col_name),
         ("Attendance", col_attendance),
         ("WBS", col_wbs),
