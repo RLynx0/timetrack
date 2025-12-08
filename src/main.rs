@@ -2,7 +2,7 @@
 
 use std::{
     env, fs,
-    io::{self, Write, stdin, stdout},
+    io::{self, IsTerminal, Write, stdin, stdout},
     path::Path,
     process::{Command, exit},
     rc::Rc,
@@ -345,16 +345,16 @@ fn print_entry_table(entries: impl IntoIterator<Item = ActivityEntry>) {
         ("Description", col_description),
     ]);
 
-    println!(
-        "{}",
-        table.to_string_with_options(&table::PrintOptions {
+    let print_options = {
+        &table::PrintOptions {
             chars: table::CharOptions::rounded(),
-            colors: Some(ColorOptions {
+            colors: io::stdout().is_terminal().then_some(ColorOptions {
                 headers: table::AnsiiColor::Blue,
-                lines: table::AnsiiColor::None
-            })
-        })
-    );
+                lines: table::AnsiiColor::None,
+            }),
+        }
+    };
+    println!("{}", table.to_string_with_options(&print_options));
 }
 
 fn open_entry_file(opts: &opt::Edit) -> Result<()> {
