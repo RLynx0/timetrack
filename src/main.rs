@@ -18,7 +18,7 @@ use crate::{
     config::Config,
     entry::ActivityEntry,
     files::get_entry_file_path,
-    opt::{Opt, last_value::LastValue},
+    opt::{Opt, activity_quantity::ActivityQuantity},
     table::{ColorOptions, Table},
 };
 
@@ -172,7 +172,7 @@ fn write_entry(entry: &ActivityEntry) -> Result<()> {
 
 fn show_entries(show_opts: &opt::Show) -> Result<()> {
     match &show_opts.last {
-        LastValue::SingleEntries(1) => show_current_entry(),
+        ActivityQuantity::SingleEntries(1) => show_current_entry(),
         lval => show_multiple_entries(lval),
     }
 }
@@ -230,12 +230,12 @@ fn format_time_delta(delta: &TimeDelta) -> String {
     out
 }
 
-fn show_multiple_entries(lval: &LastValue) -> Result<()> {
+fn show_multiple_entries(lval: &ActivityQuantity) -> Result<()> {
     let reversed_entries = match lval {
-        LastValue::SingleEntries(n) => {
+        ActivityQuantity::SingleEntries(n) => {
             get_last_n_entries(&files::get_entry_file_path()?, *n as usize)?
         }
-        LastValue::Hours(h) => {
+        ActivityQuantity::Hours(h) => {
             let start_time = Local::now()
                 .with_minute(0)
                 .unwrap()
@@ -246,7 +246,7 @@ fn show_multiple_entries(lval: &LastValue) -> Result<()> {
                 - TimeDelta::hours(*h);
             get_entries_since(&files::get_entry_file_path()?, &start_time)?
         }
-        LastValue::Days(d) => {
+        ActivityQuantity::Days(d) => {
             let start_time = Local::now()
                 .with_hour(0)
                 .unwrap()
@@ -259,7 +259,22 @@ fn show_multiple_entries(lval: &LastValue) -> Result<()> {
                 - TimeDelta::days(*d);
             get_entries_since(&files::get_entry_file_path()?, &start_time)?
         }
-        LastValue::Months(m) => {
+        ActivityQuantity::Weeks(w) => {
+            let now = Local::now();
+            let day_offset = now.weekday().num_days_from_monday();
+            let start_time = now
+                .with_hour(0)
+                .unwrap()
+                .with_minute(0)
+                .unwrap()
+                .with_second(0)
+                .unwrap()
+                .with_nanosecond(0)
+                .unwrap()
+                - TimeDelta::days(7 * w + day_offset as i64);
+            get_entries_since(&files::get_entry_file_path()?, &start_time)?
+        }
+        ActivityQuantity::Months(m) => {
             let start_time = Local::now()
                 .with_day(1)
                 .unwrap()

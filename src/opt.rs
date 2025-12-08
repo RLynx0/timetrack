@@ -1,4 +1,4 @@
-pub mod last_value;
+pub mod activity_quantity;
 
 pub use clap::{Parser, Subcommand};
 
@@ -74,17 +74,19 @@ pub struct End {
 /// Show latest tracked activity or activities
 #[derive(Debug, Clone, Parser)]
 pub struct Show {
-    /// Specify how many entries should be shown
+    /// Specify how many activities should be shown
     ///
-    /// <n>                Show the last <n> entries
-    /// <n>h | <n>hours    Show entries in the last <n> hours
-    /// <n>d | <n>days     Show entries in the last <n> days
-    /// <n>m | <n>months   Show entries in the last <n> months
-    /// hour               Show entries from the current hour
-    /// day                Show entries from the current day
-    /// month              Show entries from the current month
+    /// <n>                Show the last <n> tracked activities
+    /// <n>h | <n>hours    Show activity in the last <n> hours
+    /// <n>d | <n>days     Show activity in the last <n> days
+    /// <n>w | <n>weeks    Show activity in the last <n> weeks
+    /// <n>m | <n>months   Show activity in the last <n> months
+    /// hour               Show activity from the current hour
+    /// day                Show activity from the current day
+    /// week               Show activity from the current week
+    /// month              Show activity from the current month
     #[clap(verbatim_doc_comment, short, long, default_value = "1")]
-    pub last: last_value::LastValue,
+    pub last: activity_quantity::ActivityQuantity,
 }
 
 /// Open the activity log in an editor
