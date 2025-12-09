@@ -82,3 +82,23 @@ impl FromStr for Activity {
         })
     }
 }
+
+#[derive(Clone, Debug)]
+pub struct ActivityCategory {
+    pub name: Rc<str>,
+    pub children: Vec<ActivityItem>,
+}
+
+#[derive(Clone, Debug)]
+pub enum ActivityItem {
+    Leaf(Activity),
+    Category(ActivityCategory),
+}
+impl Display for ActivityItem {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            ActivityItem::Leaf(activity) => write!(f, "{activity}"),
+            ActivityItem::Category(category) => write!(f, "{}/\t\t", category.name),
+        }
+    }
+}

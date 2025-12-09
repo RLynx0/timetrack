@@ -159,7 +159,11 @@ pub struct ListActivities {
 
     /// Show contents of activity categories
     #[clap(short, long)]
-    pub recursive: bool,
+    pub expand: bool,
+
+    /// Print machine readable values instead of a formatted table
+    #[clap(short, long)]
+    pub raw: bool,
 }
 
 /// Print out configured attendance types
