@@ -226,9 +226,18 @@ where
     }
 }
 
-#[derive(Clone, Debug, Default)]
+#[derive(Clone, Debug)]
 pub struct ListPrintOptions {
+    pub bullet: String,
     pub colors: Option<ColorOptions>,
+}
+impl Default for ListPrintOptions {
+    fn default() -> Self {
+        ListPrintOptions {
+            bullet: String::from("-> "),
+            colors: None,
+        }
+    }
 }
 
 #[derive(Clone, Debug)]
@@ -284,10 +293,11 @@ where
             .unwrap_or_default();
         for (i, (k, v)) in filtered.into_iter().enumerate() {
             let space = " ".repeat(keys_width - k.chars().count());
+            let bullet = &self.options.bullet;
             if i != 0 {
                 f.write_char('\n')?;
             }
-            write!(f, "{col_l}-> {col_k}{k}{space} {col_l}: {col_r}{v}");
+            write!(f, "{col_l}{bullet}{col_k}{k}{space} {col_l}: {col_r}{v}");
         }
         Ok(())
     }

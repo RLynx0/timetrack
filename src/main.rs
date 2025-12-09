@@ -66,6 +66,7 @@ macro_rules! print_list {
                     lines: crate::printable::AnsiiColor::None,
                 }
             ),
+            ..Default::default()
         }));
     }
 }
