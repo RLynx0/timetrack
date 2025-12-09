@@ -1,4 +1,4 @@
-#![allow(unused)] // TODO: Remove this when more things are implemented
+// #![allow(unused)] // TODO: Remove this when more things are implemented
 
 use std::{
     fs,
@@ -9,11 +9,7 @@ use std::{
 use clap::Parser;
 use color_eyre::eyre::Result;
 
-use crate::{
-    config::Config,
-    entry_commands::{BUILTIN_ACTIVITY_IDLE, IDLE_WBS_SENTINEL},
-    opt::Opt,
-};
+use crate::{config::Config, opt::Opt};
 
 mod activity;
 mod activity_range;
@@ -21,8 +17,12 @@ mod config;
 mod entry_commands;
 mod files;
 mod format_string;
+mod generate;
 mod opt;
 mod printable;
+
+const IDLE_WBS_SENTINEL: &str = "Idle";
+const BUILTIN_ACTIVITY_IDLE: &str = "Idle";
 
 fn main() {
     let opt = Opt::parse();

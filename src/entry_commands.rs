@@ -16,9 +16,6 @@ use crate::{
     files, get_config, opt, resolve_wbs,
 };
 
-pub const IDLE_WBS_SENTINEL: &str = "Idle";
-pub const BUILTIN_ACTIVITY_IDLE: &str = "Idle";
-
 const ANSII_RED: &str = "\u{001b}[31m";
 const ANSII_GREEN: &str = "\u{001b}[32m";
 const ANSII_RESET: &str = "\u{001b}[0m";
