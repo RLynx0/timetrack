@@ -5,19 +5,20 @@ use std::{
 
 #[macro_export]
 macro_rules! print_smart_list {
-    ($($k:expr => $v: expr,)*) => {
-        println!("{}", $crate::printable::AlignedList::from([
-            $(($k, $v)),*
-        ]).with_options($crate::printable::ListPrintOptions {
-            colors: std::io::IsTerminal::is_terminal(&std::io::stdout()).then_some(
-                $crate::printable::ColorOptions {
-                    headers: $crate::printable::AnsiiColor::Blue,
-                    lines: $crate::printable::AnsiiColor::None,
-                }
-            ),
-            ..Default::default()
-        }));
-    }
+    ($kvs: expr) => {
+        println!("{}", $crate::printable::AlignedList::from($kvs)
+            .with_options($crate::printable::ListPrintOptions {
+                colors: std::io::IsTerminal::is_terminal(&std::io::stdout()).then_some(
+                    $crate::printable::ColorOptions {
+                        headers: $crate::printable::AnsiiColor::Blue,
+                        lines: $crate::printable::AnsiiColor::None,
+                    }
+                ),
+                ..Default::default()
+            }
+        ));
+    };
+    ($($k:expr => $v: expr,)*) => { print_smart_list!([$(($k, $v),)*]); }
 }
 
 #[macro_export]

@@ -43,6 +43,7 @@ fn handle_ttr_command(opt: &Opt) -> Result<()> {
             entry_commands::open_entry_file().wrap_err("failed to open entry file")
         }
         opt::TtrCommand::Generate(_) => todo!(),
+        opt::TtrCommand::ListAttendanceTypes => list_attendance_types(),
         opt::TtrCommand::Activity(opts) => handle_activity_command(opts),
     }
 }
@@ -59,6 +60,14 @@ fn handle_activity_command(activity_command: &opt::ActivityCommand) -> Result<()
             })
         }
     }
+}
+
+fn list_attendance_types() -> Result<()> {
+    let config = get_config()?;
+    let mut list = config.attendance_types.into_iter().collect::<Vec<_>>();
+    list.sort_by(|(_, va), (_, vb)| va.cmp(vb));
+    print_smart_list!(list);
+    Ok(())
 }
 
 fn get_config() -> Result<Config> {

@@ -20,9 +20,14 @@ pub enum TtrCommand {
     Show(Show),
     #[command()]
     Edit(Edit),
+    #[command()]
     Generate(Generate),
     #[command(subcommand)]
     Activity(ActivityCommand),
+
+    /// Print out configured attendance types
+    #[command()]
+    ListAttendanceTypes,
 }
 
 /// Edit or list trackable activities
