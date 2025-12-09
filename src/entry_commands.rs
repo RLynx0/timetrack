@@ -7,7 +7,10 @@ use std::{
 };
 
 use chrono::{DateTime, Local, TimeDelta};
-use color_eyre::eyre::{Result, format_err};
+use color_eyre::{
+    Section,
+    eyre::{Result, format_err},
+};
 use rev_lines::RawRevLines;
 
 use crate::{
@@ -35,6 +38,10 @@ pub fn start_activity(start_opts: &opt::Start) -> Result<()> {
         .as_deref()
         .or(last_attendance)
         .unwrap_or(&config.default_attendance);
+    if !config.attendance_types.contains_key(attendance) {
+        return Err(format_err!("attendance type '{attendance}' is not defined"))
+            .with_note(|| "edit your config file to add a new attendance type");
+    }
 
     let description = start_opts
         .description
