@@ -5,6 +5,7 @@ use std::{
 
 #[macro_export]
 macro_rules! print_smart_list {
+    ($($k:expr => $v: expr,)*) => { print_smart_list!([$(($k, $v),)*]); };
     ($kvs: expr) => {
         println!("{}", $crate::printable::AlignedList::from($kvs)
             .with_options($crate::printable::ListPrintOptions {
@@ -18,7 +19,6 @@ macro_rules! print_smart_list {
             }
         ));
     };
-    ($($k:expr => $v: expr,)*) => { print_smart_list!([$(($k, $v),)*]); }
 }
 
 #[macro_export]
