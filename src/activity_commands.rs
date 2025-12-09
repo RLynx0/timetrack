@@ -48,7 +48,7 @@ pub fn list_activities(opts: &opt::ListActivities) -> Result<()> {
     let mut col_wbs: Vec<Rc<str>> = Vec::new();
     let mut col_description: Vec<Rc<str>> = Vec::new();
     let none_value: Rc<str> = Rc::from(NONE_PRINT_VALUE);
-    for child in fs::read_dir(path)? {
+    for child in fs::read_dir(&path)? {
         let sub_path = child?.path();
         if sub_path.is_file() {
             let act_str = &fs::read_to_string(&sub_path)?;
@@ -61,11 +61,10 @@ pub fn list_activities(opts: &opt::ListActivities) -> Result<()> {
             col_wbs.push(activity.wbs().into());
             col_description.push(description);
         } else {
-            let name = sub_path
-                .file_name()
-                .ok_or(format_err!("could not read {sub_path:?} as category"))?
+            let stripped = sub_path.strip_prefix(&path)?;
+            let name = stripped
                 .to_str()
-                .ok_or(format_err!("Failed to convert os string"))?;
+                .ok_or(format_err!("could not convert {stripped:?} to string"))?;
             col_name.push(format!("{name}/").into());
             col_wbs.push(none_value.clone());
             col_description.push(none_value.clone());
