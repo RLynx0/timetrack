@@ -3,13 +3,12 @@
 use std::{
     env, fs,
     io::{self, IsTerminal, Write, stdin, stdout},
-    path::Path,
     process::{Command, exit},
     rc::Rc,
     str::FromStr,
 };
 
-use chrono::{DateTime, Datelike, Local, TimeDelta, Timelike};
+use chrono::{DateTime, Local, TimeDelta};
 use clap::Parser;
 use color_eyre::eyre::{Result, format_err};
 use rev_lines::RawRevLines;
@@ -20,9 +19,6 @@ use crate::{
     config::Config,
     files::get_entry_file_path,
     opt::Opt,
-    printable::{
-        AlignedList, AnsiiColor, ColorOptions, ListPrintOptions, Table, TablePrintOptions,
-    },
 };
 
 mod activity;
@@ -38,7 +34,6 @@ const BUILTIN_ACTIVITY_IDLE: &str = "Idle";
 
 const ANSII_RED: &str = "\u{001b}[31m";
 const ANSII_GREEN: &str = "\u{001b}[32m";
-const ANSII_BLUE: &str = "\u{001b}[34m";
 const ANSII_RESET: &str = "\u{001b}[0m";
 
 fn main() {
@@ -54,7 +49,7 @@ fn handle_ttr_command(opt: &Opt) -> Result<()> {
         opt::TtrCommand::Start(opts) => start_activity(opts),
         opt::TtrCommand::End(opts) => end_activity(opts),
         opt::TtrCommand::Show(opts) => show_activities(opts),
-        opt::TtrCommand::Edit(opts) => open_entry_file(opts),
+        opt::TtrCommand::Edit(_) => open_entry_file(),
         opt::TtrCommand::Generate(_) => todo!(),
         opt::TtrCommand::Activity(_) => todo!(),
     }
@@ -309,7 +304,7 @@ fn print_activitiy_table(activities: impl IntoIterator<Item = Activity>) {
     }
 }
 
-fn open_entry_file(opts: &opt::Edit) -> Result<()> {
+fn open_entry_file() -> Result<()> {
     let editor = env::var("EDITOR").unwrap_or(String::from("vi"));
     _ = Command::new(&editor)
         .arg(get_entry_file_path()?)
@@ -405,7 +400,7 @@ fn get_last_n_activities(count: usize) -> Result<Vec<Activity>> {
         let entry = entry_from_byte_result(line)?;
         let end_timestamp = last_timestamp.take();
         last_timestamp = Some(*entry.time_stamp());
-        if let (ActivityEntry::Start(start_entry)) = (entry) {
+        if let ActivityEntry::Start(start_entry) = entry {
             activities.push(Activity::new(start_entry, end_timestamp))
         }
     }
@@ -423,7 +418,7 @@ fn get_activities_since(start_time: &DateTime<Local>) -> Result<Vec<Activity>> {
         }
         last_entry = match entry {
             ActivityEntry::Start(activity_start) => Some(activity_start),
-            ActivityEntry::End(activity_end) => None,
+            ActivityEntry::End(_) => None,
         };
     }
     if let Some(last) = last_entry {
