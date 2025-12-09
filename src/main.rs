@@ -16,13 +16,15 @@ use rev_lines::RawRevLines;
 
 use crate::{
     activity::{Activity, ActivityEntry},
+    activity_range::ActivityRange,
     config::Config,
     files::get_entry_file_path,
-    opt::{Opt, activity_quantity::ActivityQuantity},
+    opt::Opt,
     table::{ColorOptions, Table},
 };
 
 mod activity;
+mod activity_range;
 mod config;
 mod files;
 mod format_string;
@@ -172,8 +174,8 @@ fn write_entry(entry: &ActivityEntry) -> Result<()> {
 
 fn show_activities(show_opts: &opt::Show) -> Result<()> {
     match &show_opts.last {
-        ActivityQuantity::SingleActivities(0) => show_current_entry(show_opts),
-        quantity => show_multiple_activities(show_opts, quantity),
+        ActivityRange::Count(0) => show_current_entry(show_opts),
+        range => show_activity_range(show_opts, range),
     }
 }
 
@@ -231,63 +233,10 @@ fn format_time_delta(delta: &TimeDelta) -> String {
     out
 }
 
-fn show_multiple_activities(show_opts: &opt::Show, quantity: &ActivityQuantity) -> Result<()> {
+fn show_activity_range(show_opts: &opt::Show, quantity: &ActivityRange) -> Result<()> {
     let activities = match quantity {
-        ActivityQuantity::SingleActivities(n) => get_last_n_activities(*n as usize)?,
-        ActivityQuantity::Hours(h) => {
-            let start_time = Local::now()
-                .with_minute(0)
-                .unwrap()
-                .with_second(0)
-                .unwrap()
-                .with_nanosecond(0)
-                .unwrap()
-                - TimeDelta::hours(*h);
-            get_activities_since(&start_time)?
-        }
-        ActivityQuantity::Days(d) => {
-            let start_time = Local::now()
-                .with_hour(0)
-                .unwrap()
-                .with_minute(0)
-                .unwrap()
-                .with_second(0)
-                .unwrap()
-                .with_nanosecond(0)
-                .unwrap()
-                - TimeDelta::days(*d);
-            get_activities_since(&start_time)?
-        }
-        ActivityQuantity::Weeks(w) => {
-            let now = Local::now();
-            let day_offset = now.weekday().num_days_from_monday();
-            let start_time = now
-                .with_hour(0)
-                .unwrap()
-                .with_minute(0)
-                .unwrap()
-                .with_second(0)
-                .unwrap()
-                .with_nanosecond(0)
-                .unwrap()
-                - TimeDelta::days(7 * w + day_offset as i64);
-            get_activities_since(&start_time)?
-        }
-        ActivityQuantity::Months(m) => {
-            let start_time = Local::now()
-                .with_day(1)
-                .unwrap()
-                .with_hour(0)
-                .unwrap()
-                .with_minute(0)
-                .unwrap()
-                .with_second(0)
-                .unwrap()
-                .with_nanosecond(0)
-                .unwrap();
-            // TODO: subtract m months
-            get_activities_since(&start_time)?
-        }
+        ActivityRange::Count(n) => get_last_n_activities(*n as usize)?,
+        ActivityRange::Timeframe(tf) => get_activities_since(&tf.back_from(&Local::now()))?,
     };
 
     if activities.is_empty() {
@@ -355,6 +304,7 @@ fn print_activitiy_table(activities: impl IntoIterator<Item = Activity>) {
             }),
         }
     };
+
     println!("{}", table.to_string_with_options(print_options));
 }
 

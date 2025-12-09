@@ -1,8 +1,6 @@
-pub mod activity_quantity;
-
 pub use clap::{Parser, Subcommand};
 
-use crate::BUILTIN_ACTIVITY_IDLE;
+use crate::{BUILTIN_ACTIVITY_IDLE, activity_range::ActivityRange};
 
 #[derive(Debug, Clone, Parser)]
 #[command(author, version, about, long_about = None)]
@@ -87,7 +85,7 @@ pub struct Show {
     /// week               Show activity from the current week
     /// month              Show activity from the current month
     #[clap(verbatim_doc_comment, short, long, default_value = "0")]
-    pub last: activity_quantity::ActivityQuantity,
+    pub last: ActivityRange,
 
     /// Print raw activity values instead of a table
     #[clap(short, long)]
