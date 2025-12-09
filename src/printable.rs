@@ -297,7 +297,7 @@ where
             if i != 0 {
                 f.write_char('\n')?;
             }
-            write!(f, "{col_l}{bullet}{col_k}{k}{space} {col_l}: {col_r}{v}");
+            write!(f, "{col_l}{bullet}{col_k}{k}{space} {col_l}: {col_r}{v}")?;
         }
         Ok(())
     }
