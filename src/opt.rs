@@ -136,11 +136,11 @@ pub struct SetActivity {
 #[clap(verbatim_doc_comment)]
 pub struct RemoveActivity {
     /// The name of the activity to remove
-    name: String,
+    pub name: String,
 
     /// Allow removing activity hierarchies
     #[clap(short, long)]
-    recursive: bool,
+    pub recursive: bool,
 }
 
 /// List all trackable activities
@@ -151,9 +151,9 @@ pub struct RemoveActivity {
 #[clap(verbatim_doc_comment)]
 pub struct ListActivities {
     /// List contents of a given activity category
-    name: Option<String>,
+    pub name: Option<String>,
 
     /// Show contents of activity categories
     #[clap(short, long)]
-    recursive: bool,
+    pub recursive: bool,
 }

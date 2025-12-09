@@ -34,6 +34,10 @@ pub fn set_activity(set_opts: &opt::SetActivity) -> Result<()> {
     Ok(())
 }
 
+pub fn list_activities(opts: &opt::ListActivities) -> Result<()> {
+    todo!("read and list activities")
+}
+
 pub fn read_activity(name: &str) -> Result<Activity> {
     let mut path = files::get_activity_dir_path()?;
     path.push(name);
