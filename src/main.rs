@@ -4,6 +4,7 @@ use std::{
     fs,
     io::{Write, stdin, stdout},
     process::exit,
+    rc::Rc,
 };
 
 use clap::Parser;
@@ -11,7 +12,8 @@ use color_eyre::eyre::Result;
 
 use crate::{config::Config, opt::Opt};
 
-mod activity;
+mod activity_commands;
+mod activity_entry;
 mod activity_range;
 mod config;
 mod entry_commands;
@@ -20,6 +22,7 @@ mod format_string;
 mod generate;
 mod opt;
 mod printable;
+mod trackable;
 
 const IDLE_WBS_SENTINEL: &str = "Idle";
 const BUILTIN_ACTIVITY_IDLE: &str = "Idle";
@@ -45,15 +48,15 @@ fn handle_ttr_command(opt: &Opt) -> Result<()> {
 
 fn handle_activity_command(activity_command: &opt::ActivityCommand) -> Result<()> {
     match activity_command {
-        opt::ActivityCommand::New(_) => todo!(),
+        opt::ActivityCommand::Set(opts) => activity_commands::set_activity(opts),
         opt::ActivityCommand::Rm(_) => todo!(),
         opt::ActivityCommand::Ls(_) => todo!(),
     }
 }
 
-fn resolve_wbs(activity_name: &str) -> Result<String> {
+fn resolve_wbs(activity_name: &str) -> Result<Rc<str>> {
     if activity_name == BUILTIN_ACTIVITY_IDLE {
-        return Ok(IDLE_WBS_SENTINEL.to_owned());
+        return Ok(IDLE_WBS_SENTINEL.into());
     }
 
     Err(color_eyre::eyre::format_err!(

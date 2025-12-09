@@ -33,22 +33,22 @@ impl From<chrono::format::ParseError> for ParseEntryError {
 }
 
 #[derive(Debug, Clone)]
-pub struct Activity {
+pub struct TrackedActivity {
     pub start_entry: ActivityStart,
     pub end: Option<DateTime<Local>>,
 }
-impl Activity {
+impl TrackedActivity {
     pub fn new(start_entry: ActivityStart, end: Option<DateTime<Local>>) -> Self {
-        Activity { start_entry, end }
+        TrackedActivity { start_entry, end }
     }
     pub fn new_completed(start_entry: ActivityStart, end: DateTime<Local>) -> Self {
-        Activity {
+        TrackedActivity {
             start_entry,
             end: Some(end),
         }
     }
     pub fn new_ongoing(start_entry: ActivityStart) -> Self {
-        Activity {
+        TrackedActivity {
             start_entry,
             end: None,
         }
@@ -73,7 +73,7 @@ impl Activity {
         self.start_entry.wbs()
     }
 }
-impl Display for Activity {
+impl Display for TrackedActivity {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let ActivityStart {
             time_stamp: start,

@@ -3,7 +3,7 @@ use std::{collections::HashMap, rc::Rc};
 use chrono::{DateTime, Datelike, Local, NaiveDate, TimeDelta};
 
 use crate::{
-    activity::{ActivityEntry, ActivityStart},
+    activity_entry::{ActivityEntry, ActivityStart},
     config::Config,
 };
 

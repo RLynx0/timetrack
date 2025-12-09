@@ -11,7 +11,7 @@ use color_eyre::eyre::{Result, format_err};
 use rev_lines::RawRevLines;
 
 use crate::{
-    activity::{Activity, ActivityEntry},
+    activity_entry::{ActivityEntry, TrackedActivity},
     activity_range::ActivityRange,
     files, get_config, opt, resolve_wbs,
 };
@@ -86,7 +86,7 @@ pub fn start_activity(start_opts: &opt::Start) -> Result<()> {
         print_list! {
             "Description" => description,
             "Attendance" => attendance.to_owned(),
-            "WBS" => wbs,
+            "WBS" => wbs.to_string(),
             "Date" => timestamp.format("%Y-%m-%d").to_string(),
             "Time" => timestamp.format("%H:%M:%S").to_string(),
         }
@@ -227,7 +227,7 @@ fn show_activity_range(show_opts: &opt::Show, quantity: &ActivityRange) -> Resul
     Ok(())
 }
 
-fn print_activitiy_table(activities: impl IntoIterator<Item = Activity>) {
+fn print_activitiy_table(activities: impl IntoIterator<Item = TrackedActivity>) {
     let mut col_date: Vec<Rc<str>> = Vec::new();
     let mut col_start: Vec<Rc<str>> = Vec::new();
     let mut col_end: Vec<Rc<str>> = Vec::new();
@@ -285,7 +285,7 @@ fn get_last_entry() -> Result<Option<ActivityEntry>> {
 }
 
 /// Get the last `count` activities in chronological order
-fn get_last_n_activities(count: usize) -> Result<Vec<Activity>> {
+fn get_last_n_activities(count: usize) -> Result<Vec<TrackedActivity>> {
     let path = &files::get_entry_file_path()?;
     if !fs::exists(path)? {
         return Ok(Vec::new());
@@ -302,7 +302,7 @@ fn get_last_n_activities(count: usize) -> Result<Vec<Activity>> {
         let end_timestamp = last_timestamp.take();
         last_timestamp = Some(*entry.time_stamp());
         if let ActivityEntry::Start(start_entry) = entry {
-            activities.push(Activity::new(start_entry, end_timestamp))
+            activities.push(TrackedActivity::new(start_entry, end_timestamp))
         }
     }
 
@@ -310,12 +310,12 @@ fn get_last_n_activities(count: usize) -> Result<Vec<Activity>> {
 }
 
 /// Get activities since `start_time` in chronological order
-fn get_activities_since(start_time: &DateTime<Local>) -> Result<Vec<Activity>> {
+fn get_activities_since(start_time: &DateTime<Local>) -> Result<Vec<TrackedActivity>> {
     let mut activities = Vec::new();
     let mut last_entry = None;
     for entry in get_backwards_entries_since(start_time)?.into_iter().rev() {
         if let Some(last) = last_entry {
-            activities.push(Activity::new_completed(last, *entry.time_stamp()));
+            activities.push(TrackedActivity::new_completed(last, *entry.time_stamp()));
         }
         last_entry = match entry {
             ActivityEntry::Start(activity_start) => Some(activity_start),
@@ -323,7 +323,7 @@ fn get_activities_since(start_time: &DateTime<Local>) -> Result<Vec<Activity>> {
         };
     }
     if let Some(last) = last_entry {
-        activities.push(Activity::new_ongoing(last));
+        activities.push(TrackedActivity::new_ongoing(last));
     }
     Ok(activities)
 }

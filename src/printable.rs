@@ -1,4 +1,7 @@
-use std::fmt::{Display, Write};
+use std::{
+    fmt::{Display, Write},
+    rc::Rc,
+};
 
 #[derive(Clone, Debug, Default)]
 pub enum AnsiiColor {
@@ -228,13 +231,13 @@ where
 
 #[derive(Clone, Debug)]
 pub struct ListPrintOptions {
-    pub bullet: String,
+    pub bullet: Rc<str>,
     pub colors: Option<ColorOptions>,
 }
 impl Default for ListPrintOptions {
     fn default() -> Self {
         ListPrintOptions {
-            bullet: String::from("-> "),
+            bullet: Rc::from("-> "),
             colors: None,
         }
     }

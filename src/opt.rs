@@ -29,7 +29,7 @@ pub enum TtrCommand {
 #[derive(Debug, Clone, Subcommand)]
 pub enum ActivityCommand {
     #[command()]
-    New(AddActivity),
+    Set(SetActivity),
     #[command()]
     Rm(RemoveActivity),
     #[command()]
@@ -110,18 +110,18 @@ pub struct Generate {
     file_path: Option<String>,
 }
 
-/// Define a new trackable activity
+/// Define a new trackable activity or update an existing one
 #[derive(Debug, Clone, Parser)]
-pub struct AddActivity {
-    /// The name of the new activity
-    name: String,
+pub struct SetActivity {
+    /// The name of the trackable activity
+    pub name: String,
 
     /// The wbs to use for this activity
-    wbs: String,
+    pub wbs: String,
 
     /// The default description for this activity
     #[clap(short, long)]
-    description: Option<String>,
+    pub description: Option<String>,
 }
 
 /// Remove a specified trackable activity
