@@ -13,156 +13,105 @@ use color_eyre::{
 
 use crate::{
     NONE_PRINT_VALUE, files, opt, print_smart_table,
-    trackable::{Activity, ActivityCategory, ActivityItem, BUILTIN_ACTIVITY_IDLE_NAME},
+    trackable::{Activity, ActivityCategory, ActivityLeaf},
 };
 
 pub fn set_activity(set_opts: &opt::SetActivity) -> Result<()> {
-    let name = set_opts.name.trim();
-    if name == BUILTIN_ACTIVITY_IDLE_NAME {
-        return Err(format_err!(
-            "{BUILTIN_ACTIVITY_IDLE_NAME} is a builtin activity and can't be overwritten"
-        ));
-    }
-    let mut path = files::get_activity_dir_path()?;
-    path.push(name);
-    if path.is_dir() {
-        return Err(format_err!("{path:?} is an activity category"));
-    }
-    if !set_opts.force && fs::exists(&path)? {
-        return Err(format_err!("{path:?} already exists")
-            .with_note(|| "Use --force to overwrite existing activities"));
-    }
-    if let Some(p) = path.parent() {
-        fs::create_dir_all(p)?;
-    }
-    let wbs = &set_opts.wbs;
-    let description = set_opts.description.as_deref();
-    let activity = Activity::new(name, wbs, description);
-    let mut file = fs::OpenOptions::new()
-        .create(true)
-        .truncate(true)
-        .write(true)
-        .open(path)?;
-    writeln!(file, "{activity}")?;
-    println!("Saved trackable '{}'", activity.name());
-    Ok(())
+    todo!()
+}
+
+pub fn remove_activity(set_opts: &opt::RemoveActivity) -> Result<()> {
+    todo!()
 }
 
 pub fn list_activities(opts: &opt::ListActivities) -> Result<()> {
-    let items = read_activity_hierarchy(
-        &files::get_activity_dir_path()?,
-        opts.name.as_deref(),
-        opts.expand,
-    )?
-    .into_iter()
-    .flat_map(flatten_activity_item)
-    .collect::<Vec<_>>();
+    let mut activities = get_all_trackable_activities()?;
+    let hierarchy = ActivityCategory::from(activities);
 
-    if opts.raw {
-        for item in items {
-            println!("{item}");
+    if opts.expand {
+        let sorted_activities = hierarchy.as_activities_sorted();
+        if opts.raw {
+            for activity in sorted_activities {
+                println!("{activity}");
+            }
+        } else {
+            print_activity_table(sorted_activities);
         }
     } else {
-        print_activity_table(&items);
+        if opts.raw {
+            todo!()
+        } else {
+            print_collapsed_activity_table(hierarchy);
+        }
     }
 
     Ok(())
 }
 
-fn print_activity_table(items: &[ActivityItem]) {
+fn print_activity_table(activities: impl IntoIterator<Item = Activity>) {
     let mut col_name: Vec<Rc<str>> = Vec::new();
     let mut col_wbs: Vec<Rc<str>> = Vec::new();
-    let mut col_description: Vec<Rc<str>> = Vec::new();
-    let none_value: Rc<str> = Rc::from(NONE_PRINT_VALUE);
-    for item in items {
-        match item {
-            ActivityItem::Leaf(activity) => {
-                let description = match activity.description() {
-                    Some(desc) => desc.into(),
-                    None => none_value.clone(),
-                };
-                col_description.push(description);
-                col_name.push(activity.name().into());
-                col_wbs.push(activity.wbs().into());
-            }
-            ActivityItem::Category(category) => {
-                col_name.push(format!("{}/", category.name).into());
-                col_description.push(none_value.clone());
-                col_wbs.push(none_value.clone());
-            }
-        }
+    let mut col_descr: Vec<Rc<str>> = Vec::new();
+    let none_value: Rc<str> = NONE_PRINT_VALUE.into();
+
+    for activity in activities {
+        let description = match activity.description() {
+            Some(d) => Rc::from(d),
+            None => none_value.clone(),
+        };
+        col_name.push(activity.full_path().into());
+        col_wbs.push(activity.wbs().into());
+        col_descr.push(description);
     }
 
     print_smart_table! {
         "Name" => col_name,
         "WBS" => col_wbs,
-        "Description" => col_description,
+        "Default Description" => col_descr,
     };
 }
 
-fn read_activity_hierarchy(
-    root: &Path,
-    context: Option<&str>,
-    recursive: bool,
-) -> Result<Vec<ActivityItem>> {
-    let mut path = PathBuf::from(root);
-    path.push(context.unwrap_or_default());
-    if !path.exists() {
-        return Err(format_err!("{path:?} does not exist"));
+fn print_collapsed_activity_table(hierarchy: ActivityCategory) {
+    let mut leafs: Vec<_> = hierarchy.leafs.into_values().collect();
+    let mut branch_names: Vec<_> = hierarchy.branches.into_keys().collect();
+    leafs.sort_unstable_by(|a, b| a.name().cmp(b.name()));
+    branch_names.sort_unstable();
+
+    let mut col_name: Vec<Rc<str>> = Vec::new();
+    let mut col_wbs: Vec<Rc<str>> = Vec::new();
+    let mut col_descr: Vec<Rc<str>> = Vec::new();
+    let none_value: Rc<str> = NONE_PRINT_VALUE.into();
+    for branch in branch_names {
+        col_name.push(format!("{}/", branch).into());
+        col_wbs.push(none_value.clone());
+        col_descr.push(none_value.clone());
     }
-    if !path.is_dir() {
-        return Err(format_err!("{path:?} is not an activity category"));
+    for leaf in leafs {
+        let description = match leaf.description() {
+            Some(d) => Rc::from(d),
+            None => none_value.clone(),
+        };
+        col_name.push(leaf.name().into());
+        col_wbs.push(leaf.wbs().into());
+        col_descr.push(description);
     }
 
-    let mut items = Vec::new();
-    for child in fs::read_dir(path)? {
-        let sub_path = child?.path();
-        if sub_path.is_file() {
-            let act_str = &fs::read_to_string(&sub_path)?;
-            let activity = Activity::from_str(act_str)?;
-            items.push(ActivityItem::Leaf(activity));
-        } else {
-            let stripped = sub_path.strip_prefix(root)?;
-            let name: Rc<str> = stripped
-                .to_str()
-                .ok_or(format_err!("could not convert {stripped:?} to string"))?
-                .into();
-            let children = if recursive {
-                read_activity_hierarchy(root, Some(&name), recursive)?
-            } else {
-                Vec::new()
-            };
-            items.push(ActivityItem::Category(ActivityCategory { name, children }));
-        }
-    }
-
-    items.sort_unstable_by(|a, b| match (a, b) {
-        (ActivityItem::Leaf(_), ActivityItem::Category(_)) => std::cmp::Ordering::Greater,
-        (ActivityItem::Category(_), ActivityItem::Leaf(_)) => std::cmp::Ordering::Less,
-        (a, b) => a.name().cmp(b.name()),
-    });
-
-    Ok(items)
-}
-fn flatten_activity_item(item: ActivityItem) -> Vec<ActivityItem> {
-    let mut flattened = Vec::new();
-    match item {
-        ActivityItem::Category(cat) if !cat.children.is_empty() => {
-            flattened.extend(cat.children.into_iter().flat_map(flatten_activity_item))
-        }
-        leaf => flattened.push(leaf),
-    }
-    flattened
+    print_smart_table! {
+        "Name" => col_name,
+        "WBS" => col_wbs,
+        "Default Description" => col_descr,
+    };
 }
 
-pub fn read_activity(name: &str) -> Result<Activity> {
-    let mut path = files::get_activity_dir_path()?;
-    path.push(name);
-    if path.is_dir() {
-        return Err(format_err!("{path:?} is an activity category"));
+fn get_all_trackable_activities() -> Result<Vec<Activity>> {
+    let path = files::get_activity_file_path()?;
+    if !fs::exists(&path)? {
+        return Ok(Vec::new());
     }
-    if !path.exists() {
-        return Err(format_err!("{name} does not exist yet"));
-    }
-    Ok(Activity::from_str(&fs::read_to_string(&path)?)?)
+    let mut activities = fs::read_to_string(path)?
+        .lines()
+        .map(Activity::from_str)
+        .collect::<std::result::Result<Vec<_>, _>>()?;
+    activities.push(Activity::builtin_idle());
+    Ok(activities)
 }

@@ -4,7 +4,7 @@ use color_eyre::eyre::Result;
 
 const FS_SCOPE_NAME: &str = "timetrack";
 const DEFAULT_CONFIG_FILENAME: &str = "config.toml";
-const ACTIVITY_DIR_NAME: &str = "activities";
+const ACTIVITY_FILE_NAME: &str = "activities";
 const ENTRY_FILE_NAME: &str = "entries";
 const CONFIG_HOME_VAR: &str = "TIMETRACK_HOME";
 const DATA_HOME_VAR: &str = "TIMETRACK_DATA_HOME";
@@ -15,9 +15,9 @@ pub fn get_entry_file_path() -> Result<PathBuf> {
     Ok(path)
 }
 
-pub fn get_activity_dir_path() -> Result<PathBuf> {
+pub fn get_activity_file_path() -> Result<PathBuf> {
     let mut path = get_config_home()?;
-    path.push(ACTIVITY_DIR_NAME);
+    path.push(ACTIVITY_FILE_NAME);
     Ok(path)
 }
 
