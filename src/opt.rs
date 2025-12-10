@@ -37,6 +37,8 @@ pub enum ActivityCommand {
     #[command()]
     Rm(RemoveActivity),
     #[command()]
+    Mv(MoveActivity),
+    #[command()]
     Ls(ListActivities),
 }
 
@@ -145,6 +147,20 @@ pub struct RemoveActivity {
     /// Allow removing activity hierarchies
     #[clap(short, long)]
     pub recursive: bool,
+}
+
+/// Rename a specified trackable activity
+///
+/// Entries using this activity will still be valid
+/// However, you won't be able to create new ones with it
+#[derive(Debug, Clone, Parser)]
+#[clap(verbatim_doc_comment)]
+pub struct MoveActivity {
+    /// The name of the activity to rename
+    pub from: String,
+
+    /// The new name of the activity
+    pub to: String,
 }
 
 /// List all trackable activities

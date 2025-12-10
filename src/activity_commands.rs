@@ -20,6 +20,9 @@ use crate::{
 };
 
 pub fn set_activity(set_opts: &opt::SetActivity) -> Result<()> {
+    let activities = get_all_trackable_activities()?;
+    let hierarchy = ActivityCategory::from(activities);
+
     todo!()
 }
 
@@ -28,8 +31,10 @@ pub fn remove_activity(set_opts: &opt::RemoveActivity) -> Result<()> {
 }
 
 pub fn list_activities(opts: &opt::ListActivities) -> Result<()> {
-    let mut activities = get_all_trackable_activities()?;
+    let activities = get_all_trackable_activities()?;
     let hierarchy = ActivityCategory::from(activities);
+
+    // TODO: Handle path
 
     let printable: Vec<_> = if opts.expand {
         hierarchy
@@ -78,38 +83,6 @@ fn print_activity_table(activities: impl IntoIterator<Item = PrintableActivityIt
         col_name.push(activity.display_name());
         col_descr.push(description);
         col_wbs.push(wbs);
-    }
-
-    print_smart_table! {
-        "Name" => col_name,
-        "WBS" => col_wbs,
-        "Default Description" => col_descr,
-    };
-}
-
-fn print_collapsed_activity_table(hierarchy: ActivityCategory) {
-    let mut leafs: Vec<_> = hierarchy.leafs.into_values().collect();
-    let mut branch_names: Vec<_> = hierarchy.branches.into_keys().collect();
-    leafs.sort_unstable_by(|a, b| a.name().cmp(b.name()));
-    branch_names.sort_unstable();
-
-    let mut col_name: Vec<Rc<str>> = Vec::new();
-    let mut col_wbs: Vec<Rc<str>> = Vec::new();
-    let mut col_descr: Vec<Rc<str>> = Vec::new();
-    let none_value: Rc<str> = NONE_PRINT_VALUE.into();
-    for branch in branch_names {
-        col_name.push(format!("{}/", branch).into());
-        col_wbs.push(none_value.clone());
-        col_descr.push(none_value.clone());
-    }
-    for leaf in leafs {
-        let description = match leaf.description() {
-            Some(d) => Rc::from(d),
-            None => none_value.clone(),
-        };
-        col_name.push(leaf.name().into());
-        col_wbs.push(leaf.wbs().into());
-        col_descr.push(description);
     }
 
     print_smart_table! {

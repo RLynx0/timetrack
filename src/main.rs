@@ -57,6 +57,7 @@ fn handle_activity_command(activity_command: &opt::ActivityCommand) -> Result<()
         opt::ActivityCommand::Set(opts) => activity_commands::set_activity(opts)
             .wrap_err_with(|| format!("failed to set activity '{}'", opts.name)),
         opt::ActivityCommand::Rm(_) => todo!(),
+        opt::ActivityCommand::Mv(_) => todo!(),
         opt::ActivityCommand::Ls(opts) => {
             activity_commands::list_activities(opts).wrap_err_with(|| match &opts.name {
                 Some(n) => format!("failed to list activities in {n}"),
