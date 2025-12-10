@@ -15,6 +15,9 @@ keys   = ['Datum', 'I.00309999.99.99[.99]', 'Anwesenheitsart', 'Stunden', 'Besch
 values = ['$day/$month/$year', '$wbs', '$attendance_type', '$hours', '$description']
 delimiter = "\t"
 
+[assert_format]
+wbs = '[IV]\.[0-9]{8}(\.[0-9]{2}){2,3}'
+
 [attendance_types]
 0216 = "Arbeitssuchetag"
 0230 = "Arztbesuch untertägig"
