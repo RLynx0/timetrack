@@ -14,7 +14,9 @@ use color_eyre::{
 
 use crate::{
     NONE_PRINT_VALUE, files, opt, print_smart_table,
-    trackable::{Activity, ActivityCategory, ActivityLeaf, PrintableActivityItem},
+    trackable::{
+        Activity, ActivityCategory, ActivityLeaf, BUILTIN_ACTIVITY_IDLE_NAME, PrintableActivityItem,
+    },
 };
 
 pub fn set_activity(set_opts: &opt::SetActivity) -> Result<()> {
@@ -117,7 +119,14 @@ fn print_collapsed_activity_table(hierarchy: ActivityCategory) {
     };
 }
 
-fn get_all_trackable_activities() -> Result<Vec<Activity>> {
+pub fn get_trackable_activity(activity_path: &str) -> Result<Activity> {
+    get_all_trackable_activities()?
+        .into_iter()
+        .find(|activity| activity.full_path() == activity_path)
+        .ok_or(format_err!("{activity_path} does not exist"))
+}
+
+pub fn get_all_trackable_activities() -> Result<Vec<Activity>> {
     let path = files::get_activity_file_path()?;
     let builtin_idle = Activity::builtin_idle();
     if !fs::exists(&path)? {
