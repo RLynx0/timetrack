@@ -1,4 +1,5 @@
 use std::{
+    fmt::Display,
     fs,
     io::Write,
     path::{Path, PathBuf},
@@ -13,7 +14,7 @@ use color_eyre::{
 
 use crate::{
     NONE_PRINT_VALUE, files, opt, print_smart_table,
-    trackable::{Activity, ActivityCategory, ActivityLeaf},
+    trackable::{Activity, ActivityCategory, ActivityLeaf, PrintableActivityItem},
 };
 
 pub fn set_activity(set_opts: &opt::SetActivity) -> Result<()> {
@@ -28,27 +29,36 @@ pub fn list_activities(opts: &opt::ListActivities) -> Result<()> {
     let mut activities = get_all_trackable_activities()?;
     let hierarchy = ActivityCategory::from(activities);
 
-    if opts.expand {
-        let sorted_activities = hierarchy.as_activities_sorted();
-        if opts.raw {
-            for activity in sorted_activities {
-                println!("{activity}");
-            }
-        } else {
-            print_activity_table(sorted_activities);
+    let printable: Vec<_> = if opts.expand {
+        hierarchy
+            .as_activities_sorted()
+            .into_iter()
+            .map(PrintableActivityItem::Activity)
+            .collect()
+    } else {
+        let mut branch_names = Vec::from_iter(hierarchy.branches.into_keys());
+        let mut leafs = Vec::from_iter(hierarchy.leafs.into_values());
+        leafs.sort_unstable_by(|a, b| a.name().cmp(b.name()));
+        branch_names.sort_unstable();
+        branch_names
+            .into_iter()
+            .map(PrintableActivityItem::CategoryName)
+            .chain(leafs.into_iter().map(PrintableActivityItem::ActivityLeaf))
+            .collect()
+    };
+
+    if opts.raw {
+        for activity in printable {
+            println!("{activity}");
         }
     } else {
-        if opts.raw {
-            todo!()
-        } else {
-            print_collapsed_activity_table(hierarchy);
-        }
+        print_activity_table(printable);
     }
 
     Ok(())
 }
 
-fn print_activity_table(activities: impl IntoIterator<Item = Activity>) {
+fn print_activity_table(activities: impl IntoIterator<Item = PrintableActivityItem>) {
     let mut col_name: Vec<Rc<str>> = Vec::new();
     let mut col_wbs: Vec<Rc<str>> = Vec::new();
     let mut col_descr: Vec<Rc<str>> = Vec::new();
@@ -59,9 +69,13 @@ fn print_activity_table(activities: impl IntoIterator<Item = Activity>) {
             Some(d) => Rc::from(d),
             None => none_value.clone(),
         };
-        col_name.push(activity.full_path().into());
-        col_wbs.push(activity.wbs().into());
+        let wbs = match activity.wbs() {
+            Some(w) => Rc::from(w),
+            None => none_value.clone(),
+        };
+        col_name.push(activity.display_name().into());
         col_descr.push(description);
+        col_wbs.push(wbs);
     }
 
     print_smart_table! {

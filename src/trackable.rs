@@ -177,3 +177,49 @@ impl ActivityLeaf {
         self.default_description.as_deref()
     }
 }
+impl Display for ActivityLeaf {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let descr = self.default_description.as_deref().unwrap_or_default();
+        let name = &self.name;
+        let wbs = &self.wbs;
+        write!(f, "{name}\t{wbs}\t{descr}")
+    }
+}
+
+pub enum PrintableActivityItem {
+    CategoryName(Rc<str>),
+    ActivityLeaf(ActivityLeaf),
+    Activity(Activity),
+}
+impl PrintableActivityItem {
+    pub fn display_name(&self) -> Rc<str> {
+        match self {
+            PrintableActivityItem::CategoryName(name) => name.clone(),
+            PrintableActivityItem::ActivityLeaf(leaf) => leaf.name.clone(),
+            PrintableActivityItem::Activity(activity) => Rc::from(activity.full_path()),
+        }
+    }
+    pub fn wbs(&self) -> Option<&str> {
+        match self {
+            PrintableActivityItem::CategoryName(_) => None,
+            PrintableActivityItem::ActivityLeaf(leaf) => Some(leaf.wbs()),
+            PrintableActivityItem::Activity(activity) => Some(activity.wbs()),
+        }
+    }
+    pub fn description(&self) -> Option<&str> {
+        match self {
+            PrintableActivityItem::CategoryName(_) => None,
+            PrintableActivityItem::ActivityLeaf(leaf) => leaf.description(),
+            PrintableActivityItem::Activity(activity) => activity.description(),
+        }
+    }
+}
+impl Display for PrintableActivityItem {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            PrintableActivityItem::CategoryName(name) => write!(f, "{name}/\t\t"),
+            PrintableActivityItem::ActivityLeaf(leaf) => write!(f, "{leaf}"),
+            PrintableActivityItem::Activity(activity) => write!(f, "{activity}"),
+        }
+    }
+}
