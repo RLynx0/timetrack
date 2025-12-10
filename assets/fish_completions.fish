@@ -10,11 +10,11 @@ function __timetrack_subcommands
     '
 end
 function __timetrack_attendance_types
-    timetrack list-attendance-types -r \
+    timetrack list-attendance-types -m \
         | awk -F "\t" '{ print $1 "\t\'" $2 "\'" }'
 end
 function __timetrack_activities
-    timetrack activity ls -r | awk -F "\t" '
+    timetrack activity ls -m | awk -F "\t" '
         $2 { printf "%s\t\'%s\'\n", $1, $2; next }
         { print $1 }
     '

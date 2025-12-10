@@ -95,7 +95,7 @@ pub struct Show {
 
     /// Print machine readable values instead of a formatted table
     #[clap(short, long)]
-    pub raw: bool,
+    pub machine_readable: bool,
 }
 
 /// Open the activity log in an editor
@@ -174,11 +174,11 @@ pub struct ListActivities {
 
     /// Show contents of activity categories
     #[clap(short, long)]
-    pub expand: bool,
+    pub recursive: bool,
 
     /// Print machine readable values instead of a formatted table
     #[clap(short, long)]
-    pub raw: bool,
+    pub machine_readable: bool,
 }
 
 /// Print out configured attendance types
@@ -186,5 +186,5 @@ pub struct ListActivities {
 pub struct ListAttendanceTypes {
     /// Print machine readable values instead of a formatted list
     #[clap(short, long)]
-    pub raw: bool,
+    pub machine_readable: bool,
 }

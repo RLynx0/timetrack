@@ -71,7 +71,7 @@ fn list_attendance_types(list_opts: &opt::ListAttendanceTypes) -> Result<()> {
     let config = get_config()?;
     let mut list = config.attendance_types.into_iter().collect::<Vec<_>>();
     list.sort_by(|(_, va), (_, vb)| va.cmp(vb));
-    if list_opts.raw {
+    if list_opts.machine_readable {
         for (number, hint) in list {
             println!("{number}\t{hint}")
         }

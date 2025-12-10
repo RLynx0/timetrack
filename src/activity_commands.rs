@@ -36,10 +36,10 @@ pub fn list_activities(opts: &opt::ListActivities) -> Result<()> {
 
     // TODO: Handle path
 
-    if opts.expand {
+    if opts.recursive {
         let expanded = hierarchy.expand_activities_sorted();
         let printable = expanded.iter().map(PrintableActivityItem::Activity);
-        print_activities(printable, opts.raw);
+        print_activities(printable, opts.machine_readable);
     } else {
         let mut branches = Vec::from_iter(hierarchy.branches.keys());
         let mut leafs = Vec::from_iter(hierarchy.leafs.values());
@@ -49,15 +49,15 @@ pub fn list_activities(opts: &opt::ListActivities) -> Result<()> {
             .iter()
             .map(|s| PrintableActivityItem::CategoryName(s))
             .chain(leafs.iter().map(|s| PrintableActivityItem::ActivityLeaf(s)));
-        print_activities(printable, opts.raw);
+        print_activities(printable, opts.machine_readable);
     };
     Ok(())
 }
-fn print_activities<'a, I>(activities: I, print_raw: bool)
+fn print_activities<'a, I>(activities: I, print_machine_readable: bool)
 where
     I: IntoIterator<Item = PrintableActivityItem<'a>>,
 {
-    if print_raw {
+    if print_machine_readable {
         for activity in activities {
             println!("{activity}");
         }

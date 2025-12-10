@@ -143,7 +143,7 @@ fn show_current_entry(show_opts: &opt::Show) -> Result<()> {
     let entry = get_last_entry()?;
     match entry {
         None => println!("You have not recorded any data yet"),
-        Some(entry) if show_opts.raw => println!("{entry}"),
+        Some(entry) if show_opts.machine_readable => println!("{entry}"),
         Some(ActivityEntry::End(_)) => {
             println!("You are not tracking any activity")
         }
@@ -205,7 +205,7 @@ fn show_activity_range(show_opts: &opt::Show, quantity: &ActivityRange) -> Resul
 
     if activities.is_empty() {
         println!("You have not recorded any data yet");
-    } else if show_opts.raw {
+    } else if show_opts.machine_readable {
         for activity in activities {
             println!("{activity}");
         }
