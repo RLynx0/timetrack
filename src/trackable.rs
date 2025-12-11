@@ -103,6 +103,19 @@ impl FromStr for Activity {
 }
 
 #[derive(Debug, Clone)]
+pub enum ActivityItemRef<'a> {
+    Leaf(&'a ActivityLeaf),
+    Category(&'a ActivityCategory),
+}
+pub enum LookupError<'a> {
+    NotACategory(&'a [&'a str]),
+    NoSuchItem {
+        path: &'a [&'a str],
+        requested: &'a str,
+    },
+}
+
+#[derive(Debug, Clone)]
 pub struct ActivityCategory {
     pub branches: HashMap<Rc<str>, Self>,
     pub leafs: HashMap<Rc<str>, ActivityLeaf>,
@@ -139,6 +152,29 @@ impl ActivityCategory {
         let leafs = leafs.into_iter().map(Activity::from);
 
         branches.chain(leafs).collect()
+    }
+
+    pub fn get_item_at<'a, 'b>(
+        &'a self,
+        path: &'b [&'b str],
+    ) -> Result<ActivityItemRef<'a>, LookupError<'b>> {
+        let mut out = ActivityItemRef::Category(self);
+        for (i, part) in path.iter().copied().map(Rc::from).enumerate() {
+            let category = match out {
+                ActivityItemRef::Leaf(_) => Err(LookupError::NotACategory(&path[..i])),
+                ActivityItemRef::Category(category) => Ok(category),
+            }?;
+            out = category
+                .branches
+                .get(&part)
+                .map(ActivityItemRef::Category)
+                .or(category.leafs.get(&part).map(ActivityItemRef::Leaf))
+                .ok_or(LookupError::NoSuchItem {
+                    path: &path[..i],
+                    requested: path[i],
+                })?;
+        }
+        Ok(out)
     }
 }
 impl<I> From<I> for ActivityCategory
