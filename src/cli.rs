@@ -136,7 +136,7 @@ pub struct SetActivity {
 
 /// Remove a specified trackable activity
 ///
-/// Old entries using this activity will still be valid
+/// Existing entries using this activity will still be valid
 /// However, you won't be able to create new ones with it
 #[derive(Debug, Clone, Parser)]
 #[clap(verbatim_doc_comment)]
@@ -151,7 +151,7 @@ pub struct RemoveActivity {
 
 /// Rename a specified trackable activity
 ///
-/// Old entries using this activity will retain the old name
+/// Existing entries using this activity will retain the old name
 #[derive(Debug, Clone, Parser)]
 #[clap(verbatim_doc_comment)]
 pub struct MoveActivity {
