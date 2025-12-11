@@ -18,7 +18,7 @@ use crate::{
     activity_commands::get_trackable_activity,
     activity_entry::{ActivityEntry, TrackedActivity},
     activity_range::ActivityRange,
-    files, get_config, opt, print_smart_list, print_smart_table,
+    cli, files, get_config, print_smart_list, print_smart_table,
     trackable::{Activity, ActivityLeaf, BUILTIN_ACTIVITY_IDLE_NAME},
 };
 
@@ -26,7 +26,7 @@ const ANSII_RED: &str = "\u{001b}[31m";
 const ANSII_GREEN: &str = "\u{001b}[32m";
 const ANSII_RESET: &str = "\u{001b}[0m";
 
-pub fn start_activity(start_opts: &opt::Start) -> Result<()> {
+pub fn start_activity(start_opts: &cli::Start) -> Result<()> {
     let config = &get_config()?;
     let activity_name: &str = &start_opts.activity;
     let activity = get_trackable_activity(activity_name)?;
@@ -81,7 +81,7 @@ fn sanitize_description(description: &str) -> String {
     description.replace("\t", "    ").replace("\n", " -- ")
 }
 
-pub fn end_activity(end_opts: &opt::End) -> Result<()> {
+pub fn end_activity(end_opts: &cli::End) -> Result<()> {
     let last_entry = get_last_entry()?;
     match last_entry.as_ref() {
         Some(ActivityEntry::Start(last_start)) => {
@@ -132,14 +132,14 @@ pub fn open_entry_file() -> Result<()> {
     Ok(())
 }
 
-pub fn show_activities(show_opts: &opt::Show) -> Result<()> {
+pub fn show_activities(show_opts: &cli::Show) -> Result<()> {
     match &show_opts.last {
         ActivityRange::Count(0) => show_current_entry(show_opts),
         range => show_activity_range(show_opts, range),
     }
 }
 
-fn show_current_entry(show_opts: &opt::Show) -> Result<()> {
+fn show_current_entry(show_opts: &cli::Show) -> Result<()> {
     let entry = get_last_entry()?;
     match entry {
         None => println!("You have not recorded any data yet"),
@@ -197,7 +197,7 @@ fn format_time_delta(delta: &TimeDelta) -> String {
     out
 }
 
-fn show_activity_range(show_opts: &opt::Show, quantity: &ActivityRange) -> Result<()> {
+fn show_activity_range(show_opts: &cli::Show, quantity: &ActivityRange) -> Result<()> {
     let activities = match quantity {
         ActivityRange::Count(n) => get_last_n_activities(*n as usize)?,
         ActivityRange::Timeframe(tf) => get_activities_since(&tf.back_from(&Local::now()))?,

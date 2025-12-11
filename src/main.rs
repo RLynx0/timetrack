@@ -8,17 +8,17 @@ use std::{
 use clap::Parser;
 use color_eyre::eyre::{Context, Result};
 
-use crate::{config::Config, opt::Opt};
+use crate::{cli::Cli, config::Config};
 
 mod activity_commands;
 mod activity_entry;
 mod activity_range;
+mod cli;
 mod config;
 mod entry_commands;
 mod files;
 mod format_string;
 mod generate;
-mod opt;
 mod printable;
 mod trackable;
 
@@ -26,39 +26,39 @@ const NONE_PRINT_VALUE: &str = "--";
 
 fn main() -> Result<()> {
     color_eyre::install()?;
-    let opt = Opt::parse();
-    handle_ttr_command(&opt)
+    let opts = Cli::parse();
+    handle_ttr_command(&opts)
 }
 
-fn handle_ttr_command(opt: &Opt) -> Result<()> {
-    match &opt.command {
-        opt::TtrCommand::Start(opts) => {
+fn handle_ttr_command(opts: &Cli) -> Result<()> {
+    match &opts.command {
+        cli::TtrCommand::Start(opts) => {
             entry_commands::start_activity(opts).wrap_err("failed to start tracking")
         }
-        opt::TtrCommand::End(opts) => {
+        cli::TtrCommand::End(opts) => {
             entry_commands::end_activity(opts).wrap_err("failed to end tracking")
         }
-        opt::TtrCommand::Show(opts) => {
+        cli::TtrCommand::Show(opts) => {
             entry_commands::show_activities(opts).wrap_err("failed to show activitiy")
         }
-        opt::TtrCommand::Edit(_) => {
+        cli::TtrCommand::Edit(_) => {
             entry_commands::open_entry_file().wrap_err("failed to open entry file")
         }
-        opt::TtrCommand::Generate(_) => todo!(),
-        opt::TtrCommand::Activity(opts) => handle_activity_command(opts),
+        cli::TtrCommand::Generate(_) => todo!(),
+        cli::TtrCommand::Activity(opts) => handle_activity_command(opts),
 
         // Additional convenience commands
-        opt::TtrCommand::ListAttendanceTypes(opts) => list_attendance_types(opts),
+        cli::TtrCommand::ListAttendanceTypes(opts) => list_attendance_types(opts),
     }
 }
 
-fn handle_activity_command(activity_command: &opt::ActivityCommand) -> Result<()> {
+fn handle_activity_command(activity_command: &cli::ActivityCommand) -> Result<()> {
     match activity_command {
-        opt::ActivityCommand::Set(opts) => activity_commands::set_activity(opts)
+        cli::ActivityCommand::Set(opts) => activity_commands::set_activity(opts)
             .wrap_err_with(|| format!("failed to set activity '{}'", opts.name)),
-        opt::ActivityCommand::Rm(_) => todo!(),
-        opt::ActivityCommand::Mv(_) => todo!(),
-        opt::ActivityCommand::Ls(opts) => {
+        cli::ActivityCommand::Rm(_) => todo!(),
+        cli::ActivityCommand::Mv(_) => todo!(),
+        cli::ActivityCommand::Ls(opts) => {
             activity_commands::list_activities(opts).wrap_err_with(|| match &opts.name {
                 Some(n) => format!("failed to list activities in {n}"),
                 None => String::from("failed to list activities"),
@@ -67,7 +67,7 @@ fn handle_activity_command(activity_command: &opt::ActivityCommand) -> Result<()
     }
 }
 
-fn list_attendance_types(list_opts: &opt::ListAttendanceTypes) -> Result<()> {
+fn list_attendance_types(list_opts: &cli::ListAttendanceTypes) -> Result<()> {
     let config = get_config()?;
     let mut list = config.attendance_types.into_iter().collect::<Vec<_>>();
     list.sort_by(|(_, va), (_, vb)| va.cmp(vb));

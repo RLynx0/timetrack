@@ -13,24 +13,24 @@ use color_eyre::{
 };
 
 use crate::{
-    NONE_PRINT_VALUE, files, opt, print_smart_table,
+    NONE_PRINT_VALUE, cli, files, print_smart_table,
     trackable::{
         Activity, ActivityCategory, ActivityLeaf, BUILTIN_ACTIVITY_IDLE_NAME, PrintableActivityItem,
     },
 };
 
-pub fn set_activity(set_opts: &opt::SetActivity) -> Result<()> {
+pub fn set_activity(set_opts: &cli::SetActivity) -> Result<()> {
     let activities = get_all_trackable_activities()?;
     let hierarchy = ActivityCategory::from(activities);
 
     todo!()
 }
 
-pub fn remove_activity(set_opts: &opt::RemoveActivity) -> Result<()> {
+pub fn remove_activity(set_opts: &cli::RemoveActivity) -> Result<()> {
     todo!()
 }
 
-pub fn list_activities(opts: &opt::ListActivities) -> Result<()> {
+pub fn list_activities(opts: &cli::ListActivities) -> Result<()> {
     let activities = get_all_trackable_activities()?;
     let hierarchy = ActivityCategory::from(activities);
 

@@ -5,7 +5,7 @@ use crate::{activity_range::ActivityRange, trackable::BUILTIN_ACTIVITY_IDLE_NAME
 #[derive(Debug, Clone, Parser)]
 #[command(author, version, about, long_about = None)]
 #[command(propagate_version = true)]
-pub struct Opt {
+pub struct Cli {
     #[command(subcommand)]
     pub command: TtrCommand,
 }
