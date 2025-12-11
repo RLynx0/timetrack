@@ -1,3 +1,4 @@
+use clap::ValueEnum;
 pub use clap::{Parser, Subcommand};
 
 use crate::{activity_range::ActivityRange, trackable::BUILTIN_ACTIVITY_IDLE_NAME};
@@ -78,24 +79,37 @@ pub struct End {
 /// Show latest tracked activity or activities
 #[derive(Debug, Clone, Parser)]
 pub struct Show {
+    /// Specify what you want to see
+    #[clap(default_value = "entries")]
+    pub mode: ShowMode,
+
     /// Specify how many activities should be shown
     ///
-    /// <n>                Show the last <n> tracked activities
-    /// <n>h | <n>hours    Show activities in the last <n> hours
-    /// <n>d | <n>days     Show activities in the last <n> days
-    /// <n>w | <n>weeks    Show activities in the last <n> weeks
-    /// <n>m | <n>months   Show activities in the last <n> months
-    /// 0                  Show the currently tracked activity
-    /// hour               Show activities from the current hour
-    /// day                Show activities from the current day
-    /// week               Show activities from the current week
-    /// month              Show activities from the current month
+    /// - <n>                Show the last <n> tracked activities
+    /// - <n>h | <n>hours    Show activities in the last <n> hours
+    /// - <n>d | <n>days     Show activities in the last <n> days
+    /// - <n>w | <n>weeks    Show activities in the last <n> weeks
+    /// - <n>m | <n>months   Show activities in the last <n> months
+    /// - 0                  Show the currently tracked activity
+    /// - hour               Show activities from the current hour
+    /// - day                Show activities from the current day
+    /// - week               Show activities from the current week
+    /// - month              Show activities from the current month
     #[clap(verbatim_doc_comment, short, long, default_value = "0")]
     pub last: ActivityRange,
 
     /// Print machine readable values instead of a formatted table
     #[clap(short, long)]
     pub machine_readable: bool,
+}
+#[derive(Debug, Clone, ValueEnum)]
+pub enum ShowMode {
+    /// Show individual activity entries
+    Entries,
+    /// Show a summary of tracked activities
+    Collapsed,
+    /// Show the total tracked time
+    Time,
 }
 
 /// Open the activity log in an editor
