@@ -16,7 +16,7 @@ use rev_lines::RawRevLines;
 use crate::{
     NONE_PRINT_VALUE,
     activity_commands::get_trackable_activity,
-    activity_entry::{ActivityEntry, TrackedActivity},
+    activity_entry::{ActivityEntry, ActivityStart, TrackedActivity},
     activity_range::ActivityRange,
     cli, files, get_config, print_smart_list, print_smart_table,
     trackable::{Activity, ActivityLeaf, BUILTIN_ACTIVITY_IDLE_NAME},
@@ -200,7 +200,7 @@ fn format_time_delta(delta: &TimeDelta) -> String {
 fn show_activity_range(show_opts: &cli::Show, quantity: &ActivityRange) -> Result<()> {
     let activities = match quantity {
         ActivityRange::Count(n) => get_last_n_activities(*n as usize)?,
-        ActivityRange::Timeframe(tf) => get_activities_since(&tf.back_from(&Local::now()))?,
+        ActivityRange::Timeframe(tf) => get_activities_since(dbg!(&tf.back_from(&Local::now())))?,
     };
 
     if activities.is_empty() {
@@ -278,6 +278,7 @@ fn get_last_entry() -> Result<Option<ActivityEntry>> {
 }
 
 /// Get the last `count` activities in chronological order
+/// Activities crossing over midnight will be automatically split
 fn get_last_n_activities(count: usize) -> Result<Vec<TrackedActivity>> {
     let path = &files::get_entry_file_path()?;
     if !fs::exists(path)? {
@@ -291,6 +292,7 @@ fn get_last_n_activities(count: usize) -> Result<Vec<TrackedActivity>> {
     while let Some(line) = rev_lines.next()
         && activities.len() < count
     {
+        // TODO: split activities
         let entry = entry_from_byte_result(line)?;
         let end_timestamp = last_timestamp.take();
         last_timestamp = Some(*entry.time_stamp());
@@ -303,19 +305,24 @@ fn get_last_n_activities(count: usize) -> Result<Vec<TrackedActivity>> {
 }
 
 /// Get activities since `start_time` in chronological order
+/// Activities crossing over midnight will be automatically split
 fn get_activities_since(start_time: &DateTime<Local>) -> Result<Vec<TrackedActivity>> {
     let mut activities = Vec::new();
-    let mut last_entry = None;
+    let mut last_activity_start: Option<ActivityStart> = None;
     for entry in get_backwards_entries_since(start_time)?.into_iter().rev() {
-        if let Some(last) = last_entry {
-            activities.push(TrackedActivity::new_completed(last, *entry.time_stamp()));
+        if let Some(last) = last_activity_start {
+            activities.extend(
+                TrackedActivity::new_completed(last, *entry.time_stamp())
+                    .split_on_midnight()
+                    .filter(|a| a.end_time().map(|t| t >= start_time).unwrap_or(true)),
+            );
         }
-        last_entry = match entry {
+        last_activity_start = match entry {
             ActivityEntry::Start(activity_start) => Some(activity_start),
             ActivityEntry::End(_) => None,
         };
     }
-    if let Some(last) = last_entry {
+    if let Some(last) = last_activity_start {
         activities.push(TrackedActivity::new_ongoing(last));
     }
     Ok(activities)

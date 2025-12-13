@@ -1,6 +1,6 @@
 use std::{fmt::Display, rc::Rc, str::FromStr};
 
-use chrono::{DateTime, Local};
+use chrono::{DateTime, Local, NaiveTime, TimeDelta};
 
 const END_SENTINEL: &str = "__END";
 
@@ -54,6 +54,13 @@ impl TrackedActivity {
         }
     }
 
+    pub fn split_on_midnight(self) -> SplitActivity {
+        SplitActivity {
+            current_start: Some(self.start_entry),
+            end: self.end,
+        }
+    }
+
     pub fn start_time(&self) -> &DateTime<Local> {
         self.start_entry.time_stamp()
     }
@@ -87,6 +94,30 @@ impl Display for TrackedActivity {
     }
 }
 
+pub struct SplitActivity {
+    current_start: Option<ActivityStart>,
+    end: Option<DateTime<Local>>,
+}
+impl Iterator for SplitActivity {
+    type Item = TrackedActivity;
+    fn next(&mut self) -> Option<Self::Item> {
+        let start = self.current_start.take()?;
+        let end = self.end.unwrap_or(Local::now());
+        if start.time_stamp.date_naive() < end.date_naive() {
+            let next_midnight = start
+                .time_stamp
+                .with_time(NaiveTime::MIN)
+                .earliest()
+                .unwrap()
+                + TimeDelta::days(1);
+            self.current_start = Some(start.with_timestamp(next_midnight));
+            Some(TrackedActivity::new_completed(start, next_midnight))
+        } else {
+            Some(TrackedActivity::new(start, self.end))
+        }
+    }
+}
+
 #[derive(Debug, Clone)]
 pub enum ActivityEntry {
     Start(ActivityStart),
@@ -114,13 +145,7 @@ impl ActivityEntry {
     }
     pub fn with_timestamp(&self, time_stamp: DateTime<Local>) -> Self {
         match self {
-            ActivityEntry::Start(activity_start) => ActivityEntry::Start(ActivityStart {
-                time_stamp,
-                activity_name: activity_start.activity_name.clone(),
-                attendance_type: activity_start.attendance_type.clone(),
-                description: activity_start.description.clone(),
-                wbs: activity_start.wbs.clone(),
-            }),
+            ActivityEntry::Start(start) => ActivityEntry::Start(start.with_timestamp(time_stamp)),
             ActivityEntry::End(activity_end) => ActivityEntry::End(ActivityEnd { time_stamp }),
         }
     }
@@ -215,5 +240,15 @@ impl ActivityStart {
     }
     pub fn wbs(&self) -> &str {
         &self.wbs
+    }
+
+    fn with_timestamp(&self, time_stamp: DateTime<Local>) -> ActivityStart {
+        ActivityStart {
+            time_stamp,
+            activity_name: self.activity_name.clone(),
+            attendance_type: self.attendance_type.clone(),
+            description: self.description.clone(),
+            wbs: self.wbs.clone(),
+        }
     }
 }

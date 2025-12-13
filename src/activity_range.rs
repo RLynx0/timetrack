@@ -1,6 +1,6 @@
 use std::str::FromStr;
 
-use chrono::{DateTime, Datelike, Local, NaiveDate, TimeDelta, TimeZone, Timelike};
+use chrono::{DateTime, Datelike, Local, NaiveDate, NaiveTime, TimeDelta, TimeZone, Timelike};
 use color_eyre::{
     Report,
     eyre::{Result, format_err},
@@ -41,35 +41,16 @@ impl InLast {
     pub fn back_from(&self, now: &DateTime<Local>) -> DateTime<Local> {
         match self {
             InLast::Hours(h) => {
-                now.with_minute(0)
-                    .unwrap()
-                    .with_second(0)
-                    .unwrap()
-                    .with_nanosecond(0)
-                    .unwrap()
+                now.with_time(NaiveTime::MIN).earliest().unwrap()
+                    + TimeDelta::hours(now.hour() as i64)
                     - TimeDelta::hours(*h)
             }
             InLast::Days(d) => {
-                now.with_hour(0)
-                    .unwrap()
-                    .with_minute(0)
-                    .unwrap()
-                    .with_second(0)
-                    .unwrap()
-                    .with_nanosecond(0)
-                    .unwrap()
-                    - TimeDelta::days(*d)
+                now.with_time(NaiveTime::MIN).earliest().unwrap() - TimeDelta::days(*d)
             }
             InLast::Weeks(w) => {
                 let days_since_monday = now.weekday().num_days_from_monday();
-                now.with_hour(0)
-                    .unwrap()
-                    .with_minute(0)
-                    .unwrap()
-                    .with_second(0)
-                    .unwrap()
-                    .with_nanosecond(0)
-                    .unwrap()
+                now.with_time(NaiveTime::MIN).earliest().unwrap()
                     - TimeDelta::days(*w * 7 + days_since_monday as i64)
             }
             InLast::Months(m) => {
@@ -78,19 +59,13 @@ impl InLast {
                 let year = now.year();
                 let new_year = year + month_delta.div_euclid(12) as i32;
                 let new_month = month_delta.rem_euclid(12) as u32 + 1;
-                let naive = NaiveDate::from_ymd_opt(new_year, new_month, 1)
+                NaiveDate::from_ymd_opt(new_year, new_month, 1)
                     .unwrap()
                     .and_hms_opt(0, 0, 0)
-                    .unwrap();
-
-                match Local.from_local_datetime(&naive) {
-                    chrono::offset::LocalResult::Single(s) => s,
-                    chrono::offset::LocalResult::Ambiguous(a, _) => a,
-                    chrono::offset::LocalResult::None => {
-                        let fallback = naive + TimeDelta::hours(1);
-                        Local.from_local_datetime(&fallback).unwrap()
-                    }
-                }
+                    .unwrap()
+                    .and_local_timezone(Local)
+                    .earliest()
+                    .unwrap()
             }
         }
     }
