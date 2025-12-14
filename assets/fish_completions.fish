@@ -25,13 +25,17 @@ function __timetrack_attendance_types
         | awk -F "\t" '{ print $1 "\t\'" $2 "\'" }'
 end
 function __timetrack_activities
-    timetrack activity ls -m | awk -F "\t" '
+    set parent (commandline -ct | string replace -r '[^/]+$' '')
+    timetrack activity ls -m $parent | awk -v p="$parent" -F "\t" '
+        { printf "%s", p }
         $2 { printf "%s\t\'%s\'\n", $1, $2; next }
         { print $1 }
     '
 end
 
-complete -c timetrack -f -a "(__timetrack_subcommands)"
+complete -c timetrack -f \
+    -n __fish_use_subcommand \
+    -a "(__timetrack_subcommands)"
 
 complete -c timetrack -f \
     -n '__fish_seen_subcommand_from activity' \
