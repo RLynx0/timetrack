@@ -200,7 +200,7 @@ fn format_time_delta(delta: &TimeDelta) -> String {
 fn show_activity_range(show_opts: &cli::Show, quantity: &ActivityRange) -> Result<()> {
     let activities = match quantity {
         ActivityRange::Count(n) => get_last_n_activities(*n as usize)?,
-        ActivityRange::Timeframe(tf) => get_activities_since(dbg!(&tf.back_from(&Local::now())))?,
+        ActivityRange::Timeframe(tf) => get_activities_since(&tf.back_from(&Local::now()))?,
     };
 
     if activities.is_empty() {
