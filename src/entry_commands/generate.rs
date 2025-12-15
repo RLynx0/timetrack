@@ -1,4 +1,4 @@
-use std::{collections::HashMap, fs, io::Write, rc::Rc};
+use std::{collections::HashMap, fmt::Display, fs, io::Write, rc::Rc};
 
 use chrono::{DateTime, Datelike, Local, NaiveDate, TimeDelta};
 use color_eyre::eyre::Result;
@@ -63,6 +63,36 @@ pub struct CollapsedActivity {
     duration: TimeDelta,
     start_of_first: DateTime<Local>,
     wbs: Rc<str>,
+}
+impl CollapsedActivity {
+    pub fn attendance(&self) -> &str {
+        &self.attendance_type
+    }
+    pub fn description(&self) -> &str {
+        &self.description
+    }
+    pub fn duration(&self) -> TimeDelta {
+        self.duration
+    }
+    pub fn start_time(&self) -> DateTime<Local> {
+        self.start_of_first
+    }
+    pub fn wbs(&self) -> &str {
+        &self.wbs
+    }
+}
+impl Display for CollapsedActivity {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "{}\t{:.2}\t{}\t{}\t{}",
+            self.start_of_first.format("%Y-%m-%d"),
+            self.duration.as_seconds_f64() / 3600.0,
+            self.attendance_type,
+            self.wbs,
+            self.description,
+        )
+    }
 }
 
 pub fn collapse_activities(
