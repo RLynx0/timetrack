@@ -41,6 +41,7 @@ pub fn handle_generate(generate_opts: &cli::Generate) -> Result<()> {
         let mut file = fs::OpenOptions::new()
             .create(true)
             .write(true)
+            .truncate(true)
             .open(file_name)?;
         writeln!(&mut file, "{keys}\n{lines}")?;
         println!("Generated {file_name}");
