@@ -2,6 +2,7 @@ use std::{
     collections::HashMap,
     error::Error,
     fmt::{Debug, Display},
+    sync::Arc,
 };
 
 use nom::{
@@ -23,7 +24,7 @@ impl FormatString {
     pub(crate) fn evaluate<'a, S>(
         &'a self,
         variables: &'a HashMap<&str, S>,
-    ) -> Result<String, EvalError<'a>>
+    ) -> Result<String, EvalError>
     where
         S: AsRef<str>,
     {
@@ -35,8 +36,8 @@ impl FormatString {
                     Some(value) => buffer.push_str(value.as_ref()),
                     None => {
                         return Err(EvalError::VarNotFound {
-                            provided: variables.keys().copied().collect(),
-                            requested: variable,
+                            provided: variables.keys().copied().map(<Arc<str>>::from).collect(),
+                            requested: Arc::from(variable.as_str()),
                         });
                     }
                 },
@@ -98,14 +99,14 @@ pub enum FormatStringPart {
 }
 
 #[derive(Debug, Clone)]
-pub enum EvalError<'a> {
+pub enum EvalError {
     VarNotFound {
-        requested: &'a str,
-        provided: Vec<&'a str>,
+        requested: Arc<str>,
+        provided: Vec<Arc<str>>,
     },
 }
-impl<'a> Error for EvalError<'a> {}
-impl<'a> Display for EvalError<'a> {
+impl Error for EvalError {}
+impl Display for EvalError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             EvalError::VarNotFound {

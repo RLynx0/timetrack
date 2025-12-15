@@ -320,7 +320,7 @@ fn get_last_n_activities(count: usize) -> Result<Vec<TrackedActivity>> {
 
 /// Get activities since `start_time` in chronological order
 /// Activities crossing over midnight will be automatically split
-fn get_activities_since(start_time: &DateTime<Local>) -> Result<Vec<TrackedActivity>> {
+pub fn get_activities_since(start_time: &DateTime<Local>) -> Result<Vec<TrackedActivity>> {
     let mut activities = Vec::new();
     let mut last_activity_start: Option<ActivityStart> = None;
     for entry in get_backwards_entries_since(start_time)?.into_iter().rev() {

@@ -123,11 +123,11 @@ pub struct Edit;
 pub struct Generate {
     /// Print to stdout instead of saving to file
     #[clap(short, long)]
-    stdout: bool,
+    pub stdout: bool,
 
     /// Save to custom filepath
     #[clap(short, long)]
-    file_path: Option<String>,
+    pub file_path: Option<String>,
 }
 
 /// Define a new trackable activity
