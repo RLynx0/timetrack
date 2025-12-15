@@ -27,6 +27,10 @@ pub fn set_activity(set_opts: &cli::SetActivity) -> Result<()> {
     todo!()
 }
 
+pub fn move_activity(move_opts: &cli::MoveActivity) -> Result<()> {
+    todo!()
+}
+
 pub fn remove_activity(set_opts: &cli::RemoveActivity) -> Result<()> {
     todo!()
 }

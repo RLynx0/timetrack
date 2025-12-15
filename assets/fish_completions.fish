@@ -101,7 +101,7 @@ complete -c timetrack \
 # Subcommand activity
 complete -c timetrack -f \
     -n '__fish_seen_subcommand_from activity' \
-    -n 'not __fish_seen_subcommand_from new rm mv ls help' \
+    -n 'not __fish_seen_subcommand_from set rm mv ls help' \
     -a"(__timetrack_activity_subcommands)"
 
 # Subcommand activity ls
