@@ -1,6 +1,6 @@
-use std::rc::Rc;
+use std::{fmt::Display, rc::Rc};
 
-use chrono::{Local, TimeDelta};
+use chrono::{DateTime, DurationRound, Local, TimeDelta};
 use color_eyre::eyre::Result;
 use owo_colors::{OwoColorize, Stream};
 
@@ -80,7 +80,9 @@ fn show_activity_range(show_opts: &cli::Show, quantity: &ActivityRange) -> Resul
         cli::ShowMode::Collapsed => {
             show_collapsed_activities(&activities, show_opts.machine_readable);
         }
-        cli::ShowMode::Attendance => todo!(),
+        cli::ShowMode::Attendance => {
+            show_daily_attendance(&activities, show_opts.machine_readable);
+        }
         cli::ShowMode::Time => {
             show_activity_time(&activities, show_opts.machine_readable);
         }
@@ -192,6 +194,108 @@ fn print_collapsed_activity_table(collapsed_activities: &[CollapsedActivity]) {
     }
 }
 
+// ---------- //
+// Attendance //
+// ---------- //
+
+fn show_daily_attendance(activities: &[TrackedActivity], machine_readable: bool) {
+    let ranges = get_attendance_ranges(activities, Local::now());
+    if machine_readable {
+        for range in ranges {
+            println!("{range}");
+        }
+    } else {
+        print_attendance_table(&ranges);
+    }
+}
+
+fn print_attendance_table(ranges: &[AttendanceRange]) {
+    let mut col_date: Vec<Rc<str>> = Vec::new();
+    let mut col_start: Vec<Rc<str>> = Vec::new();
+    let mut col_end: Vec<Rc<str>> = Vec::new();
+    let mut col_hours: Vec<Rc<str>> = Vec::new();
+    let mut col_hours_adjusted: Vec<Rc<str>> = Vec::new();
+    let mut col_attendance: Vec<Rc<str>> = Vec::new();
+
+    for range in ranges {
+        let quantum = TimeDelta::minutes(15);
+        let start = range.start.duration_trunc(quantum).unwrap();
+        let end = range.end.duration_round_up(quantum).unwrap();
+        let delta = end - start;
+        let delta_adjusted = if delta <= TimeDelta::hours(6) {
+            delta
+        } else {
+            delta - TimeDelta::minutes(30)
+        };
+
+        let hours = delta.as_seconds_f64() / 3600.0;
+        let hours_adjusted = delta_adjusted.as_seconds_f64() / 3600.0;
+
+        col_date.push(start.format("%Y-%m-%d").to_string().into());
+        col_start.push(start.format("%H:%M:%S").to_string().into());
+        col_end.push(end.format("%H:%M:%S").to_string().into());
+        col_hours.push(format!("{hours:.2}").into());
+        col_hours_adjusted.push(format!("{hours_adjusted:.2}").into());
+        col_attendance.push(range.attendance_type.clone());
+    }
+
+    print_smart_table! {
+        "Date" => col_date,
+        "Start" => col_start,
+        "End" => col_end,
+        "Hours" => col_hours,
+        "Hours Adjusted" => col_hours_adjusted,
+        "Attendance" => col_attendance,
+    }
+}
+
+fn get_attendance_ranges(
+    activities: &[TrackedActivity],
+    fallback_end: DateTime<Local>,
+) -> Vec<AttendanceRange> {
+    let mut ranges = Vec::new();
+    let mut last_activity: Option<AttendanceRange> = None;
+    for activity in activities {
+        if let Some(last) = last_activity {
+            last_activity = Some(
+                if &last.end == activity.start_time()
+                    && activity.attendance() == Rc::as_ref(&last.attendance_type)
+                {
+                    AttendanceRange {
+                        end: activity.end_time().copied().unwrap_or(fallback_end),
+                        ..last
+                    }
+                } else {
+                    ranges.push(last);
+                    AttendanceRange {
+                        start: *activity.start_time(),
+                        end: activity.end_time().copied().unwrap_or(fallback_end),
+                        attendance_type: Rc::from(activity.attendance()),
+                    }
+                },
+            )
+        } else {
+            last_activity = Some(AttendanceRange {
+                start: *activity.start_time(),
+                end: activity.end_time().copied().unwrap_or(fallback_end),
+                attendance_type: Rc::from(activity.attendance()),
+            });
+        }
+    }
+    ranges.extend(last_activity);
+    ranges
+}
+struct AttendanceRange {
+    start: DateTime<Local>,
+    end: DateTime<Local>,
+    attendance_type: Rc<str>,
+}
+impl Display for AttendanceRange {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(f, "{}\t{:}\t{}", self.start, self.end, self.attendance_type)
+    }
+}
+
 // ---- //
 // Time //
 // ---- //
@@ -205,7 +309,9 @@ fn show_activity_time(activities: &[TrackedActivity], machine_readable: bool) {
     if machine_readable {
         println!("{:.2}", delta.as_seconds_f64());
     } else {
-        println!("{}", format_time_delta(&delta));
+        print_smart_list! {
+            "Tracked Time" => format_time_delta(&delta),
+        };
     }
 }
 
