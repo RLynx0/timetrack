@@ -199,7 +199,7 @@ fn print_collapsed_activity_table(collapsed_activities: &[CollapsedActivity]) {
 // ---------- //
 
 fn show_daily_attendance(activities: &[TrackedActivity], machine_readable: bool) {
-    let ranges = get_attendance_ranges(activities, Local::now());
+    let ranges = get_attendance_ranges(activities);
     if machine_readable {
         for range in ranges {
             println!("{range}");
@@ -216,12 +216,14 @@ fn print_attendance_table(ranges: &[AttendanceRange]) {
     let mut col_hours: Vec<Rc<str>> = Vec::new();
     let mut col_hours_adjusted: Vec<Rc<str>> = Vec::new();
     let mut col_attendance: Vec<Rc<str>> = Vec::new();
+    let none_value: Rc<str> = NONE_PRINT_VALUE.into();
 
     for range in ranges {
+        let end_or_now = range.end.unwrap_or(Local::now());
         let quantum = TimeDelta::minutes(15);
         let start = range.start.duration_trunc(quantum).unwrap();
-        let end = range.end.duration_round_up(quantum).unwrap();
-        let delta = end - start;
+        let end_or_now = end_or_now.duration_round_up(quantum).unwrap();
+        let delta = end_or_now - start;
         let delta_adjusted = if delta <= TimeDelta::hours(6) {
             delta
         } else {
@@ -230,10 +232,14 @@ fn print_attendance_table(ranges: &[AttendanceRange]) {
 
         let hours = delta.as_seconds_f64() / 3600.0;
         let hours_adjusted = delta_adjusted.as_seconds_f64() / 3600.0;
+        let end_str = match range.end {
+            Some(t) => t.format("%H:%M").to_string().into(),
+            None => none_value.clone(),
+        };
 
         col_date.push(start.format("%Y-%m-%d").to_string().into());
-        col_start.push(start.format("%H:%M:%S").to_string().into());
-        col_end.push(end.format("%H:%M:%S").to_string().into());
+        col_start.push(start.format("%H:%M").to_string().into());
+        col_end.push(end_str);
         col_hours.push(format!("{hours:.2}").into());
         col_hours_adjusted.push(format!("{hours_adjusted:.2}").into());
         col_attendance.push(range.attendance_type.clone());
@@ -249,27 +255,24 @@ fn print_attendance_table(ranges: &[AttendanceRange]) {
     }
 }
 
-fn get_attendance_ranges(
-    activities: &[TrackedActivity],
-    fallback_end: DateTime<Local>,
-) -> Vec<AttendanceRange> {
+fn get_attendance_ranges(activities: &[TrackedActivity]) -> Vec<AttendanceRange> {
     let mut ranges = Vec::new();
     let mut last_activity: Option<AttendanceRange> = None;
     for activity in activities {
         if let Some(last) = last_activity {
             last_activity = Some(
-                if &last.end == activity.start_time()
+                if last.end == Some(*activity.start_time())
                     && activity.attendance() == Rc::as_ref(&last.attendance_type)
                 {
                     AttendanceRange {
-                        end: activity.end_time().copied().unwrap_or(fallback_end),
+                        end: activity.end_time().copied(),
                         ..last
                     }
                 } else {
                     ranges.push(last);
                     AttendanceRange {
                         start: *activity.start_time(),
-                        end: activity.end_time().copied().unwrap_or(fallback_end),
+                        end: activity.end_time().copied(),
                         attendance_type: Rc::from(activity.attendance()),
                     }
                 },
@@ -277,7 +280,7 @@ fn get_attendance_ranges(
         } else {
             last_activity = Some(AttendanceRange {
                 start: *activity.start_time(),
-                end: activity.end_time().copied().unwrap_or(fallback_end),
+                end: activity.end_time().copied(),
                 attendance_type: Rc::from(activity.attendance()),
             });
         }
@@ -287,12 +290,18 @@ fn get_attendance_ranges(
 }
 struct AttendanceRange {
     start: DateTime<Local>,
-    end: DateTime<Local>,
+    end: Option<DateTime<Local>>,
     attendance_type: Rc<str>,
 }
 impl Display for AttendanceRange {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(f, "{}\t{:}\t{}", self.start, self.end, self.attendance_type)
+        write!(
+            f,
+            "{}\t{}\t{}",
+            self.start,
+            self.end.map(|t| t.to_string()).unwrap_or_default(),
+            self.attendance_type
+        )
     }
 }
 
