@@ -233,8 +233,13 @@ fn print_attendance_table(ranges: &[AttendanceRange]) {
         let hours = delta.as_seconds_f64() / 3600.0;
         let hours_adjusted = delta_adjusted.as_seconds_f64() / 3600.0;
         let end_str = match range.end {
-            Some(t) => t.format("%H:%M").to_string().into(),
             None => none_value.clone(),
+            Some(t) => t
+                .duration_round_up(quantum)
+                .unwrap()
+                .format("%H:%M")
+                .to_string()
+                .into(),
         };
 
         col_date.push(start.format("%Y-%m-%d").to_string().into());
