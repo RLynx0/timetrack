@@ -1,6 +1,6 @@
 use std::{fs, rc::Rc, str::FromStr};
 
-use color_eyre::eyre::{Context, Result, format_err};
+use color_eyre::eyre::{Result, format_err};
 
 use crate::{
     NONE_PRINT_VALUE, cli, files, print_smart_list, print_smart_table,

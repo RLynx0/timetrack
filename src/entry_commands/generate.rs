@@ -1,10 +1,14 @@
-use std::{collections::HashMap, fmt::Display, fs, io::Write, path::PathBuf, rc::Rc};
+use std::{collections::HashMap, fs, io::Write, path::PathBuf, rc::Rc};
 
-use chrono::{DateTime, Datelike, Local, NaiveDate, TimeDelta};
+use chrono::{Datelike, Local, NaiveDate};
 use color_eyre::eyre::{Result, format_err};
 
 use crate::{
-    activity_entry::TrackedActivity, activity_range::InLast, cli, config::Config, get_config,
+    activity_entry::activity_groupings::{CollapsedActivity, collapse_activities},
+    activity_range::InLast,
+    cli,
+    config::Config,
+    get_config,
 };
 
 use super::get_activities_since;
@@ -61,96 +65,6 @@ pub fn handle_generate(generate_opts: &cli::Generate) -> Result<()> {
     Ok(())
 }
 
-/// Grouping of activities with
-/// - Same wbs
-/// - Same description
-/// - Same attendance type
-/// - Same local date (precise time is irrelevant)
-#[derive(Debug, Clone)]
-pub struct CollapsedActivity {
-    attendance_type: Rc<str>,
-    description: Rc<str>,
-    duration: TimeDelta,
-    start_of_first: DateTime<Local>,
-    wbs: Rc<str>,
-}
-impl CollapsedActivity {
-    pub fn attendance(&self) -> &str {
-        &self.attendance_type
-    }
-    pub fn description(&self) -> &str {
-        &self.description
-    }
-    pub fn duration(&self) -> TimeDelta {
-        self.duration
-    }
-    pub fn start_time(&self) -> DateTime<Local> {
-        self.start_of_first
-    }
-    pub fn wbs(&self) -> &str {
-        &self.wbs
-    }
-}
-impl Display for CollapsedActivity {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        write!(
-            f,
-            "{}\t{:.2}\t{}\t{}\t{}",
-            self.start_of_first.format("%Y-%m-%d"),
-            self.duration.as_seconds_f64() / 3600.0,
-            self.attendance_type,
-            self.wbs,
-            self.description,
-        )
-    }
-}
-
-pub fn collapse_activities(
-    activities: &[TrackedActivity],
-    end_fallback: DateTime<Local>,
-) -> Vec<CollapsedActivity> {
-    let mut grouped_activities = HashMap::new();
-    let activities: Vec<_> = activities
-        .iter()
-        .cloned()
-        .flat_map(|t| t.split_on_midnight(end_fallback))
-        .collect();
-    for activity in &activities {
-        grouped_activities
-            .entry(get_group_key(activity))
-            .or_insert_with(|| CollapsedActivity {
-                attendance_type: activity.attendance().into(),
-                description: activity.description().into(),
-                duration: TimeDelta::zero(),
-                start_of_first: *activity.start_time(),
-                wbs: activity.wbs().into(),
-            })
-            .duration +=
-            activity.end_time().copied().unwrap_or(Local::now()) - activity.start_time();
-    }
-
-    let mut grouped_activities = Vec::from_iter(grouped_activities.into_values());
-    grouped_activities.sort_unstable_by(|a, b| a.start_of_first.cmp(&b.start_of_first));
-    grouped_activities
-}
-
-#[derive(PartialEq, Eq, Hash)]
-struct ActivityGroupKey<'a> {
-    wbs: &'a str,
-    attendance_type: &'a str,
-    description: &'a str,
-    date: NaiveDate,
-}
-
-fn get_group_key<'a>(activity: &'a TrackedActivity) -> ActivityGroupKey<'a> {
-    ActivityGroupKey {
-        wbs: activity.wbs(),
-        attendance_type: activity.attendance(),
-        description: activity.description(),
-        date: activity.start_time().date_naive(),
-    }
-}
-
 fn vars_per_generated_file(cfg: &Config, date: NaiveDate) -> HashMap<&'static str, Rc<str>> {
     HashMap::from([
         // From config
@@ -167,8 +81,8 @@ fn vars_per_generated_file(cfg: &Config, date: NaiveDate) -> HashMap<&'static st
 }
 
 fn vars_per_collapsed_activity(activity: &CollapsedActivity) -> HashMap<&'static str, Rc<str>> {
-    let date = activity.start_of_first.date_naive();
-    let seconds = activity.duration.as_seconds_f64();
+    let date = activity.start_time().date_naive();
+    let seconds = activity.duration().as_seconds_f64();
     HashMap::from([
         // Regarding date
         ("year", Rc::from(date.year().to_string())),
@@ -179,8 +93,8 @@ fn vars_per_collapsed_activity(activity: &CollapsedActivity) -> HashMap<&'static
         ("minutes", Rc::from(format!("{:.2}", seconds / 60.0))),
         ("seconds", Rc::from(format!("{:.2}", seconds))),
         // Other
-        ("attendance_type", activity.attendance_type.clone()),
-        ("description", activity.description.clone()),
-        ("wbs", activity.wbs.clone()),
+        ("attendance_type", activity.attendance().into()),
+        ("description", activity.description().into()),
+        ("wbs", activity.wbs().into()),
     ])
 }

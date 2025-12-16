@@ -2,6 +2,8 @@ use std::{fmt::Display, rc::Rc, str::FromStr};
 
 use chrono::{DateTime, Local, NaiveTime, TimeDelta};
 
+pub mod activity_groupings;
+
 const END_SENTINEL: &str = "__END";
 
 #[derive(Debug, Clone)]
