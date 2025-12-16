@@ -77,6 +77,10 @@ complete -c timetrack -fs v \
     -n '__fish_seen_subcommand_from start'
 
 # Subcommand show
+complete -c timetrack -f \
+    -n '__fish_seen_subcommand_from show' \
+    -n 'not __fish_seen_subcommand_from entries collapsed attendance time' \
+    -a "entries collapsed attendance time"
 complete -c timetrack \
     -rfs l \
     -n '__fish_seen_subcommand_from show' \
