@@ -4,7 +4,10 @@ use std::{
 };
 
 use clap::Parser;
-use color_eyre::eyre::{Context, Result};
+use color_eyre::{
+    Section,
+    eyre::{Context, Result},
+};
 
 use crate::{cli::Cli, config::Config};
 
@@ -45,9 +48,8 @@ fn handle_ttr_command(opts: &Cli) -> Result<()> {
             entry_commands::handle_generate(opts).wrap_err("failed to generate output")
         }
         cli::TtrCommand::Activity(opts) => handle_activity_command(opts),
-
-        // Additional convenience commands
         cli::TtrCommand::ListAttendanceTypes(opts) => list_attendance_types(opts),
+        cli::TtrCommand::GenerateConfig => make_guided_config(),
     }
 }
 
@@ -86,24 +88,20 @@ fn get_config() -> Result<Config> {
         let config_str = fs::read_to_string(config_path)?;
         Ok(toml::from_str(&config_str)?)
     } else {
-        println!("I couldn't find the required config at {config_path:?}");
-        println!("Let me guide you through creating your configuration!");
-        let config = make_guided_config()?;
-        let config_str = toml::to_string(&config)?;
-        if let Some(p) = config_path.parent() {
-            fs::create_dir_all(p)?;
-        }
-        fs::write(&config_path, config_str)?;
-        println!("Saved generated configuration to {config_path:?}");
-        println!("\n--------\n");
-        Ok(config)
+        Err(color_eyre::eyre::format_err!(
+            "{config_path:?} does not exist"
+        ))
+        .wrap_err("Failed to load configuration")
+        .with_note(|| "`generate-config` can help you create a configuration file")
     }
 }
 
-fn make_guided_config() -> Result<Config> {
+fn make_guided_config() -> Result<()> {
+    let config_path = files::get_main_config_path()?;
     let default = toml::from_str::<Config>(include_str!("../assets/default_config.toml"))
         .expect("Default config must be valid");
 
+    println!("Let me guide you through creating a configuration file!");
     let employee_name = get_input_string("Your Name")?;
     let employee_number = get_input_string("Your emplyee id")?;
     let cost_center = get_input_string("Your cost center")?;
@@ -111,21 +109,28 @@ fn make_guided_config() -> Result<Config> {
     let accounting_cycle = get_input_string("Your accounting cycle")?;
 
     println!("\nOkay, that's it!");
-
     let default_attendance = &default.default_attendance;
     println!("\nI have set your default attendance type to {default_attendance}.",);
     println!("This is probably what you want, but in case it isn't -");
     println!("You can always manually edit the generated config file.");
     println!("There are a few more options there that were also set automatically!");
 
-    Ok(Config {
+    let config = Config {
         employee_name,
         employee_number,
         cost_center,
         performance_type,
         accounting_cycle,
         ..default
-    })
+    };
+
+    let config_str = toml::to_string(&config)?;
+    if let Some(p) = config_path.parent() {
+        fs::create_dir_all(p)?;
+    }
+    fs::write(&config_path, config_str)?;
+    println!("Your config has been saved to {config_path:?}.");
+    Ok(())
 }
 
 fn get_input_string(query: &str) -> Result<String> {

@@ -26,6 +26,10 @@ pub enum TtrCommand {
     #[command(subcommand)]
     Activity(ActivityCommand),
 
+    // Convenience Commands
+    /// Easily generate a timetrack configuration file
+    #[command()]
+    GenerateConfig,
     #[command()]
     ListAttendanceTypes(ListAttendanceTypes),
 }
