@@ -1,3 +1,26 @@
+function __timetrack_subcommands
+    timetrack help | awk '
+        /^\w/ { c = 0 }
+        /^Commands:/ { c = 1; next }
+        !/^$/ && c {
+            com = $1
+            gsub(/^\s*\w+\s*/, "", $0)
+            printf "%s\t\'%s\'\n", com, $0
+        }
+    '
+end
+function __timetrack_show_modes
+    timetrack help show | awk '
+        /^\s*$/ { c = 0 }
+        /^\s*Possible values:/ { c = 1; next }
+        c {
+            com = $2
+            gsub(/:/, "", com);
+            gsub(/^\s*-\s*\w+:?\s*/, "", $0)
+            printf "%s\t\'%s\'\n", com, $0
+        }
+    '
+end
 function __timetrack_range_suggestions
     set -l token (commandline -ct)
     echo -e 0\n1\nhour\nday\nweek\nmonth
@@ -10,17 +33,6 @@ function __timetrack_range_suggestions
 end
 function __timetrack_activity_subcommands
     timetrack activity help | awk '
-        /^\w/ { c = 0 }
-        /^Commands:/ { c = 1; next }
-        !/^$/ && c {
-            com = $1
-            gsub(/^\s*\w+\s*/, "", $0)
-            printf "%s\t\'%s\'\n", com, $0
-        }
-    '
-end
-function __timetrack_subcommands
-    timetrack help | awk '
         /^\w/ { c = 0 }
         /^Commands:/ { c = 1; next }
         !/^$/ && c {
@@ -79,8 +91,7 @@ complete -c timetrack -fs v \
 # Subcommand show
 complete -c timetrack -f \
     -n '__fish_seen_subcommand_from show' \
-    -n 'not __fish_seen_subcommand_from entries collapsed attendance time' \
-    -a "entries collapsed attendance time"
+    -a "(__timetrack_show_modes)"
 complete -c timetrack \
     -rfs l \
     -n '__fish_seen_subcommand_from show' \
