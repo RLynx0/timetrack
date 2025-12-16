@@ -29,7 +29,7 @@ pub enum TtrCommand {
     // Convenience Commands
     /// Easily generate a timetrack configuration file
     #[command()]
-    GenerateConfig,
+    MakeConfig,
     #[command()]
     ListAttendanceTypes(ListAttendanceTypes),
 }

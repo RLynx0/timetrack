@@ -49,7 +49,7 @@ fn handle_ttr_command(opts: &Cli) -> Result<()> {
         }
         cli::TtrCommand::Activity(opts) => handle_activity_command(opts),
         cli::TtrCommand::ListAttendanceTypes(opts) => list_attendance_types(opts),
-        cli::TtrCommand::GenerateConfig => make_guided_config(),
+        cli::TtrCommand::MakeConfig => make_guided_config(),
     }
 }
 
@@ -92,7 +92,7 @@ fn get_config() -> Result<Config> {
             "{config_path:?} does not exist"
         ))
         .wrap_err("Failed to load configuration")
-        .with_note(|| "`generate-config` can help you create a configuration file")
+        .with_note(|| "`make-config` can help you create a configuration file")
     }
 }
 
