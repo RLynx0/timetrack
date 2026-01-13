@@ -8,7 +8,7 @@ default_attendance = '0800'    # Your default attendance type
 
 # 💡You probably won't have to change the remaining sections for TSA
 
-[output]
+[generate]
 upload_destination = '\\T-Systems.int.neonet.at\Data\Special\TSA-Accounting\CATS-Aktuell'
 file_name_format = '${year}${month}_${cost_center}_${performance_type}_${employee_number}.txt'
 keys   = ['Datum', 'I.00309999.99.99[.99]', 'Anwesenheitsart', 'Stunden', 'Beschreibung']

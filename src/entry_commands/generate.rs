@@ -20,18 +20,18 @@ pub fn handle_generate(generate_opts: &cli::Generate) -> Result<()> {
     let collapsed = collapse_activities(&activities, now);
 
     let config = get_config()?;
-    let keys = config.output.keys.join(&config.output.delimiter);
+    let keys = config.generate.keys.join(&config.generate.delimiter);
     let lines = collapsed
         .iter()
         .map(|c| {
             let vars = vars_per_collapsed_activity(c);
             config
-                .output
+                .generate
                 .values
                 .iter()
                 .map(|v| v.evaluate(&vars))
                 .collect::<core::result::Result<Vec<_>, _>>()
-                .map(|s| s.join(&config.output.delimiter))
+                .map(|s| s.join(&config.generate.delimiter))
         })
         .collect::<core::result::Result<Vec<_>, _>>()?
         .join("\r\n");
@@ -42,7 +42,7 @@ pub fn handle_generate(generate_opts: &cli::Generate) -> Result<()> {
     }
 
     let file_vars = vars_per_generated_file(&config, start_time.date_naive());
-    let default_name = config.output.file_name_format.evaluate(&file_vars)?;
+    let default_name = config.generate.file_name_format.evaluate(&file_vars)?;
     let file_path = generate_opts.file_path.as_ref().unwrap_or(&default_name);
     let mut file_path = PathBuf::from(file_path);
     while fs::exists(&file_path)? {

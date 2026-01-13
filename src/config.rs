@@ -13,12 +13,12 @@ pub struct Config {
     pub accounting_cycle: String,
     pub default_attendance: String,
 
-    pub output: OutputConfig,
+    pub generate: GenerateConfig,
     pub attendance_types: HashMap<String, String>,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct OutputConfig {
+pub struct GenerateConfig {
     pub upload_destination: String,
     pub file_name_format: FormatString,
     pub keys: Vec<String>,
