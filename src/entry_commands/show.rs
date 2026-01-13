@@ -82,7 +82,7 @@ fn show_activity_range(show_opts: &cli::Show, quantity: &ActivityRange) -> Resul
             show_collapsed_activities(&activities, show_opts.machine_readable);
         }
         cli::ShowMode::Attendance => {
-            show_daily_attendance(&activities, show_opts.machine_readable);
+            show_daily_attendance(&activities, show_opts.machine_readable)?;
         }
         cli::ShowMode::Time => {
             show_activity_time(&activities, show_opts.machine_readable);
@@ -199,18 +199,20 @@ fn print_collapsed_activity_table(collapsed_activities: &[CollapsedActivity]) {
 // Attendance //
 // ---------- //
 
-fn show_daily_attendance(activities: &[TrackedActivity], machine_readable: bool) {
+fn show_daily_attendance(activities: &[TrackedActivity], machine_readable: bool) -> Result<()> {
     let ranges = get_attendance_ranges(activities);
     if machine_readable {
         for range in ranges {
             println!("{range}");
         }
     } else {
-        print_attendance_table(&ranges);
+        print_attendance_table(&ranges)?;
     }
+
+    Ok(())
 }
 
-fn print_attendance_table(ranges: &[AttendanceRange]) {
+fn print_attendance_table(ranges: &[AttendanceRange]) -> Result<()> {
     let mut col_date: Vec<Rc<str>> = Vec::new();
     let mut col_start: Vec<Rc<str>> = Vec::new();
     let mut col_end: Vec<Rc<str>> = Vec::new();
@@ -239,12 +241,19 @@ fn print_attendance_table(ranges: &[AttendanceRange]) {
         let hours = delta.as_seconds_f64() / 3600.0;
         let hours_adjusted = delta_adjusted.as_seconds_f64() / 3600.0;
 
+        let config = get_config()?;
+        let attendance = range.attendance();
+        let attendance_str = match config.attendance_types.get(attendance) {
+            Some(hint) if !hint.trim().is_empty() => format!("{attendance} ({hint})"),
+            _ => attendance.to_string(),
+        };
+
         col_date.push(start.format("%Y-%m-%d").to_string().into());
         col_start.push(start.format("%H:%M").to_string().into());
         col_end.push(end_str);
         col_hours.push(format!("{hours:.2}").into());
         col_hours_adjusted.push(format!("{hours_adjusted:.2}").into());
-        col_attendance.push(range.attendance().into());
+        col_attendance.push(attendance_str.into());
     }
 
     print_smart_table! {
@@ -255,6 +264,8 @@ fn print_attendance_table(ranges: &[AttendanceRange]) {
         "Adjusted Hours" => col_hours_adjusted,
         "Attendance" => col_attendance,
     }
+
+    Ok(())
 }
 
 // ---- //
