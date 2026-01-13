@@ -9,6 +9,19 @@ function __timetrack_subcommands
         }
     '
 end
+function __timetrack_edit_options
+    timetrack help edit | awk '
+        /^\s*$/ { c = 0 }
+        /^\s*Possible values:/ { c = 1; next }
+        c {
+            com = $2
+            gsub(/:/, "", com);
+            gsub(/^\s*-\s*\w+:?\s*/, "", $0)
+            gsub(/\s*\[[^\]]+\]\s*$/, "", $0)
+            printf "%s\t\'%s\'\n", com, $0
+        }
+    '
+end
 function __timetrack_show_modes
     timetrack help show | awk '
         /^\s*$/ { c = 0 }
@@ -87,6 +100,11 @@ complete -c timetrack -fl verbose \
     -n '__fish_seen_subcommand_from start'
 complete -c timetrack -fs v \
     -n '__fish_seen_subcommand_from start'
+
+# Subcommand edit
+complete -c timetrack -f \
+    -n '__fish_seen_subcommand_from edit' \
+    -a "(__timetrack_edit_options)"
 
 # Subcommand show
 complete -c timetrack -f \
