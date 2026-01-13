@@ -105,6 +105,16 @@ complete -c timetrack -fs v \
 complete -c timetrack -f \
     -n '__fish_seen_subcommand_from edit' \
     -a "(__timetrack_edit_options)"
+complete -c timetrack \
+    -fl help \
+    -n '__fish_seen_subcommand_from edit'
+complete -c timetrack \
+    -fs h \
+    -n '__fish_seen_subcommand_from edit'
+complete -c timetrack -fl verbose \
+    -n '__fish_seen_subcommand_from edit'
+complete -c timetrack -fs v \
+    -n '__fish_seen_subcommand_from edit'
 
 # Subcommand show
 complete -c timetrack -f \
