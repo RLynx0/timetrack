@@ -76,10 +76,10 @@ fn show_activity_range(show_opts: &cli::Show, quantity: &ActivityRange) -> Resul
 
     match show_opts.mode {
         cli::ShowMode::Entries => {
-            show_individual_activities(&activities, show_opts.machine_readable);
+            show_individual_activities(&activities, show_opts.machine_readable)?;
         }
         cli::ShowMode::Collapsed => {
-            show_collapsed_activities(&activities, show_opts.machine_readable);
+            show_collapsed_activities(&activities, show_opts.machine_readable)?;
         }
         cli::ShowMode::Attendance => {
             show_daily_attendance(&activities, show_opts.machine_readable)?;
@@ -96,17 +96,22 @@ fn show_activity_range(show_opts: &cli::Show, quantity: &ActivityRange) -> Resul
 // Entries //
 // ------- //
 
-fn show_individual_activities(activities: &[TrackedActivity], machine_readable: bool) {
+fn show_individual_activities(
+    activities: &[TrackedActivity],
+    machine_readable: bool,
+) -> Result<()> {
     if machine_readable {
         for activity in activities {
             println!("{activity}");
         }
     } else {
-        print_activitiy_table(activities);
+        print_activitiy_table(activities)?;
     }
+
+    Ok(())
 }
 
-fn print_activitiy_table(activities: &[TrackedActivity]) {
+fn print_activitiy_table(activities: &[TrackedActivity]) -> Result<()> {
     let mut col_date: Vec<Rc<str>> = Vec::new();
     let mut col_start: Vec<Rc<str>> = Vec::new();
     let mut col_end: Vec<Rc<str>> = Vec::new();
@@ -122,6 +127,13 @@ fn print_activitiy_table(activities: &[TrackedActivity]) {
         let time_to = activity.end_time().copied().unwrap_or(Local::now());
         let hours = (time_to - start).as_seconds_f64() / 3600.0;
 
+        let config = get_config()?;
+        let attendance = activity.attendance();
+        let attendance_str = match config.attendance_types.get(attendance) {
+            Some(hint) if !hint.trim().is_empty() => format!("{attendance} ({hint})"),
+            _ => attendance.to_string(),
+        };
+
         col_date.push(start.format("%Y-%m-%d").to_string().into());
         col_start.push(start.format("%H:%M:%S").to_string().into());
         col_end.push(match activity.end_time() {
@@ -130,7 +142,7 @@ fn print_activitiy_table(activities: &[TrackedActivity]) {
         });
         col_hours.push(format!("{hours:.2}").into());
         col_name.push(activity.name().into());
-        col_attendance.push(activity.attendance().into());
+        col_attendance.push(attendance_str.into());
         col_wbs.push(activity.wbs().into());
         col_description.push(match activity.description() {
             "" => none_value.clone(),
@@ -148,24 +160,28 @@ fn print_activitiy_table(activities: &[TrackedActivity]) {
         "WBS" => col_wbs,
         "Description" => col_description,
     }
+
+    Ok(())
 }
 
 // --------- //
 // Collapsed //
 // --------- //
 
-fn show_collapsed_activities(activities: &[TrackedActivity], machine_readable: bool) {
+fn show_collapsed_activities(activities: &[TrackedActivity], machine_readable: bool) -> Result<()> {
     let collapsed_activities = collapse_activities(activities, Local::now());
     if machine_readable {
         for collapsed in collapsed_activities {
             println!("{collapsed}");
         }
     } else {
-        print_collapsed_activity_table(&collapsed_activities)
+        print_collapsed_activity_table(&collapsed_activities)?
     }
+
+    Ok(())
 }
 
-fn print_collapsed_activity_table(collapsed_activities: &[CollapsedActivity]) {
+fn print_collapsed_activity_table(collapsed_activities: &[CollapsedActivity]) -> Result<()> {
     let mut col_date: Vec<Rc<str>> = Vec::new();
     let mut col_hours: Vec<Rc<str>> = Vec::new();
     let mut col_attendance: Vec<Rc<str>> = Vec::new();
@@ -176,9 +192,17 @@ fn print_collapsed_activity_table(collapsed_activities: &[CollapsedActivity]) {
     for collapsed in collapsed_activities {
         let start = collapsed.start_time();
         let hours = collapsed.duration().as_seconds_f64() / 3600.0;
+
+        let config = get_config()?;
+        let attendance = collapsed.attendance();
+        let attendance_str = match config.attendance_types.get(attendance) {
+            Some(hint) if !hint.trim().is_empty() => format!("{attendance} ({hint})"),
+            _ => attendance.to_string(),
+        };
+
         col_date.push(start.format("%Y-%m-%d").to_string().into());
         col_hours.push(format!("{hours:.2}").into());
-        col_attendance.push(collapsed.attendance().into());
+        col_attendance.push(attendance_str.into());
         col_wbs.push(collapsed.wbs().into());
         col_description.push(match collapsed.description() {
             "" => none_value.clone(),
@@ -193,6 +217,8 @@ fn print_collapsed_activity_table(collapsed_activities: &[CollapsedActivity]) {
         "WBS" => col_wbs,
         "Description" => col_description,
     }
+
+    Ok(())
 }
 
 // ---------- //
