@@ -4,7 +4,7 @@ function __timetrack_subcommands
         /^Commands:/ { c = 1; next }
         !/^$/ && c {
             com = $1
-            gsub(/^\s*\w+\s*/, "", $0)
+            gsub(/^\s*[a-zA-Z0-9_-]+\s*/, "", $0)
             printf "%s\t\'%s\'\n", com, $0
         }
     '
