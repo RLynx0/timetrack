@@ -1,78 +1,30 @@
-use std::{
-    fmt::{Display, Write},
-    rc::Rc,
-};
+use std::{fmt::Display, rc::Rc};
+
+use owo_colors::{OwoColorize, Stream};
 
 #[macro_export]
 macro_rules! print_smart_list {
     ($($k:expr => $v: expr,)*) => { print_smart_list!([$(($k, $v),)*]); };
     ($kvs: expr) => {
-        println!("{}", $crate::printable::AlignedList::from($kvs)
-            .with_options($crate::printable::ListPrintOptions {
-                colors: std::io::IsTerminal::is_terminal(&std::io::stdout()).then_some(
-                    $crate::printable::ColorOptions {
-                        headers: $crate::printable::AnsiiColor::Blue,
-                        lines: $crate::printable::AnsiiColor::None,
-                    }
-                ),
-                ..Default::default()
-            }
-        ));
+        $crate::printable::AlignedList::from($kvs)
+            .with_options($crate::printable::ListPrintOptions::default())
+            .print();
     };
 }
 
 #[macro_export]
 macro_rules! print_smart_table {
     ($($k:expr => $vs: expr,)*) => {
-        println!("{}", $crate::printable::Table::from([
+        $crate::printable::Table::from([
             $(($k, $vs)),*
         ]).with_options($crate::printable::TablePrintOptions {
             chars: $crate::printable::TableCharOptions::rounded(),
-            colors: std::io::IsTerminal::is_terminal(&std::io::stdout()).then_some(
-                $crate::printable::ColorOptions {
-                    headers: $crate::printable::AnsiiColor::Blue,
-                    lines: $crate::printable::AnsiiColor::None,
-                }
-            ),
-        }));
+        }).print();
     };
 }
 
 #[derive(Clone, Debug, Default)]
-pub enum AnsiiColor {
-    #[default]
-    None,
-    Red,
-    Yellow,
-    Green,
-    Cyan,
-    Blue,
-    Magenta,
-}
-impl Display for AnsiiColor {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        let ansii_code = match self {
-            AnsiiColor::None => "0",
-            AnsiiColor::Red => "31",
-            AnsiiColor::Yellow => "33",
-            AnsiiColor::Green => "32",
-            AnsiiColor::Cyan => "35",
-            AnsiiColor::Blue => "34",
-            AnsiiColor::Magenta => "36",
-        };
-        write!(f, "\u{001b}[{ansii_code}m")
-    }
-}
-
-#[derive(Clone, Debug, Default)]
-pub struct ColorOptions {
-    pub headers: AnsiiColor,
-    pub lines: AnsiiColor,
-}
-
-#[derive(Clone, Debug, Default)]
 pub struct TablePrintOptions {
-    pub colors: Option<ColorOptions>,
     pub chars: TableCharOptions,
 }
 #[derive(Clone, Debug)]
@@ -177,12 +129,12 @@ where
         }
     }
 }
-impl<K, V> Display for Table<K, V>
+impl<K, V> Table<K, V>
 where
     K: Display,
     V: Display,
 {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+    pub fn print(&self) {
         let copt = &self.options.chars;
         let mut widths = Vec::new();
         for (i, k) in self.keys.iter().enumerate() {
@@ -195,42 +147,37 @@ where
             widths.push(width);
         }
 
-        let (c_header, c_line, c_reset) = match &self.options.colors {
-            Some(c) => (
-                c.headers.to_string(),
-                c.lines.to_string(),
-                AnsiiColor::None.to_string(),
-            ),
-            None => (String::new(), String::new(), String::new()),
-        };
-
         // Conditionally print top table cap
-        f.write_str(&c_line)?;
         if let Some(co) = &copt.caps {
             for (i, w) in widths.iter().enumerate() {
-                f.write_char(if i == 0 { co.dr } else { co.hd })?;
-                f.write_str(&copt.h.to_string().repeat(*w + 2))?;
+                let v_char = if i == 0 { co.dr } else { co.hd };
+                let h_line = &copt.h.to_string().repeat(*w + 2);
+                print!("{v_char}{h_line}");
             }
-            f.write_char(co.dl)?;
-            writeln!(f)?;
+            println!("{}", co.dl);
         }
 
         // Print table headers
-        f.write_char(copt.v)?;
+        print!("{}", copt.v);
         for (k, w) in self.keys.iter().zip(&widths) {
             let k = k.to_string();
             let space = " ".repeat(w - k.chars().count());
-            write!(f, " {c_header}{k}{space} {c_line}{}", copt.v)?;
+            print!(
+                " {}{} {}",
+                k.if_supports_color(Stream::Stdout, |n| n.blue()),
+                space,
+                copt.v
+            );
         }
-        writeln!(f)?;
+        println!();
 
         // Print header separator
         for (i, w) in widths.iter().enumerate() {
-            f.write_char(if i == 0 { copt.vr } else { copt.hv })?;
-            f.write_str(&copt.h.to_string().repeat(*w + 2))?;
+            let v_char = if i == 0 { copt.vr } else { copt.hv };
+            let h_line = &copt.h.to_string().repeat(*w + 2);
+            print!("{v_char}{h_line}");
         }
-        f.write_char(copt.vl)?;
-        f.write_str(&c_reset)?;
+        println!("{}", copt.vl);
 
         // Print table rows
         let complete_rows = self
@@ -240,40 +187,34 @@ where
             .max()
             .unwrap_or_default();
         for r in 0..complete_rows {
-            writeln!(f)?;
-            f.write_str(&c_line)?;
-            f.write_char(copt.v)?;
             for (i, width) in widths.iter().enumerate() {
                 let v = self.columns[i][r].to_string();
                 let space = " ".repeat(width - v.chars().count());
-                write!(f, " {c_reset}{v}{space} {c_line}{}", copt.v)?;
+                print!("{} {v}{space} ", copt.v);
             }
+            println!("{}", copt.v);
         }
 
         // Conditionally print bottom table cap
         if let Some(co) = &copt.caps {
-            writeln!(f)?;
             for (i, w) in widths.iter().enumerate() {
-                f.write_char(if i == 0 { co.ur } else { co.hu })?;
-                f.write_str(&copt.h.to_string().repeat(*w + 2))?;
+                let v_char = if i == 0 { co.ur } else { co.hu };
+                let h_line = &copt.h.to_string().repeat(*w + 2);
+                print!("{v_char}{h_line}");
             }
-            f.write_char(co.ul)?;
+            println!("{}", co.ul);
         }
-
-        f.write_str(&c_reset)
     }
 }
 
 #[derive(Clone, Debug)]
 pub struct ListPrintOptions {
     pub bullet: Rc<str>,
-    pub colors: Option<ColorOptions>,
 }
 impl Default for ListPrintOptions {
     fn default() -> Self {
         ListPrintOptions {
             bullet: Rc::from("-> "),
-            colors: None,
         }
     }
 }
@@ -303,20 +244,12 @@ where
         }
     }
 }
-impl<K, V> Display for AlignedList<K, V>
+impl<K, V> AlignedList<K, V>
 where
     K: Display,
     V: Display,
 {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        let (col_l, col_k, col_r) = match &self.options.colors {
-            Some(co) => (
-                co.lines.to_string(),
-                co.headers.to_string(),
-                AnsiiColor::None.to_string(),
-            ),
-            None => (String::new(), String::new(), String::new()),
-        };
+    pub fn print(&self) {
         let filtered = self
             .keys
             .iter()
@@ -329,14 +262,13 @@ where
             .map(|(k, _)| k.chars().count())
             .max()
             .unwrap_or_default();
-        for (i, (k, v)) in filtered.into_iter().enumerate() {
+        for (k, v) in filtered.into_iter() {
             let space = " ".repeat(keys_width - k.chars().count());
             let bullet = &self.options.bullet;
-            if i != 0 {
-                writeln!(f)?;
-            }
-            write!(f, "{col_l}{bullet}{col_k}{k}{space} {col_l}: {col_r}{v}")?;
+            println!(
+                "{bullet}{}{space} : {v}",
+                k.if_supports_color(Stream::Stdout, |n| n.blue())
+            );
         }
-        Ok(())
     }
 }
