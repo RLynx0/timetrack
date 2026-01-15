@@ -70,18 +70,19 @@ end
 
 complete -c timetrack -f \
     -n __fish_use_subcommand \
-    -a "(__timetrack_subcommands)"
+    -n 'not __fish_seen_subcommand_from start end show edit generate activity make-config list-attendance-types help' \
+    -a '(__timetrack_subcommands)'
 
 # Subcommand start
 complete -c timetrack -f \
     -n '__fish_seen_subcommand_from start' \
     -a "(__timetrack_activities)"
 complete -c timetrack \
-    -rfl attendance -s a \
+    -xl attendance -s a \
     -n '__fish_seen_subcommand_from start' \
     -a "(__timetrack_attendance_types)"
 complete -c timetrack \
-    -rfl description -s d \
+    -xl description -s d \
     -n '__fish_seen_subcommand_from start'
 complete -c timetrack \
     -fl verbose -s v \
@@ -98,9 +99,9 @@ complete -c timetrack -f \
     -n '__fish_seen_subcommand_from edit' \
     -a "(__timetrack_edit_options)"
 complete -c timetrack \
-    -rl editor -s e \
-    -xd 'Executable to open the file with' \
-    -n '__fish_seen_subcommand_from edit'
+    -xl editor -s e \
+    -n '__fish_seen_subcommand_from edit' \
+    -a '(__fish_complete_command)'
 complete -c timetrack \
     -fl help -s h \
     -n '__fish_seen_subcommand_from edit'
@@ -111,11 +112,11 @@ complete -c timetrack \
 # Subcommand show
 complete -c timetrack -f \
     -n '__fish_seen_subcommand_from show' \
-    -a "(__timetrack_show_modes)"
+    -a '(__timetrack_show_modes)'
 complete -c timetrack \
-    -rfl last -s l \
+    -xl last -s l \
     -n '__fish_seen_subcommand_from show' \
-    -a "(__timetrack_range_suggestions)"
+    -a '(__timetrack_range_suggestions)'
 complete -c timetrack \
     -fl machine-readable -s m \
     -n '__fish_seen_subcommand_from show'
@@ -130,13 +131,13 @@ complete -c timetrack \
 complete -c timetrack -f \
     -n '__fish_seen_subcommand_from activity' \
     -n 'not __fish_seen_subcommand_from set rm mv ls help' \
-    -a "(__timetrack_activity_subcommands)"
+    -a '(__timetrack_activity_subcommands)'
 
 # Subcommand activity ls
 complete -c timetrack -f \
     -n '__fish_seen_subcommand_from activity' \
     -n '__fish_seen_subcommand_from ls' \
-    -a "(__timetrack_activities)"
+    -a '(__timetrack_activities)'
 complete -c timetrack \
     -fl recursive -s r \
     -n '__fish_seen_subcommand_from activity' \
