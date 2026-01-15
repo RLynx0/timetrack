@@ -87,18 +87,18 @@ pub struct Show {
     #[clap(default_value = "entries")]
     pub mode: ShowMode,
 
-    /// Specify how many activities should be shown
+    /// Specify how many results should be shown
     ///
-    /// - <n>                Show the last <n> tracked activities
-    /// - <n>h | <n>hours    Show activities in the last <n> hours
-    /// - <n>d | <n>days     Show activities in the last <n> days
-    /// - <n>w | <n>weeks    Show activities in the last <n> weeks
-    /// - <n>m | <n>months   Show activities in the last <n> months
-    /// - 0                  Show the currently tracked activity
-    /// - hour               Show activities from the current hour
-    /// - day                Show activities from the current day
-    /// - week               Show activities from the current week
-    /// - month              Show activities from the current month
+    /// - <n>                Show the last <n> results
+    /// - <n>h | <n>hours    Show results in the last <n> hours
+    /// - <n>d | <n>days     Show results in the last <n> days
+    /// - <n>w | <n>weeks    Show results in the last <n> weeks
+    /// - <n>m | <n>months   Show results in the last <n> months
+    /// - 0                  Show the currently active result
+    /// - hour               Show results from the current hour
+    /// - day                Show results from the current day
+    /// - week               Show results from the current week
+    /// - month              Show results from the current month
     #[clap(verbatim_doc_comment, short, long, default_value = "0")]
     pub last: ActivityRange,
 
