@@ -140,12 +140,11 @@ pub fn handle_edit(edit_opts: &cli::Edit) -> Result<()> {
         cli::EditTarget::Config => get_main_config_path(),
         cli::EditTarget::Activities => get_activity_file_path(),
     }?;
-    open_editor_to_file(&path)
+    open_editor_to_file(&edit_opts.editor, &path)
 }
 
 /// Opens the activity log with `EDITOR`
-fn open_editor_to_file(path: &Path) -> Result<()> {
-    let editor = env::var("EDITOR").unwrap_or(String::from("vi"));
+fn open_editor_to_file(editor: &str, path: &Path) -> Result<()> {
     _ = Command::new(&editor)
         .arg(path)
         .status()

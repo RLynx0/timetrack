@@ -118,13 +118,16 @@ pub enum ShowMode {
     Time,
 }
 
-/// Open the activity log in an editor
-///
-/// Set the EDITOR environment variable to use a specific program
+/// Open a timetrack work file in an editor
 #[derive(Debug, Clone, Parser)]
 pub struct Edit {
+    /// Specify the timetrack file to open
     #[clap(default_value = "entries")]
     pub target: EditTarget,
+
+    /// Specify a program to open the file with
+    #[clap(short, long, env = "EDITOR", default_value = "vi")]
+    pub editor: String,
 }
 #[derive(Debug, Clone, ValueEnum)]
 pub enum EditTarget {

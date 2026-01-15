@@ -106,6 +106,12 @@ complete -c timetrack -f \
     -n '__fish_seen_subcommand_from edit' \
     -a "(__timetrack_edit_options)"
 complete -c timetrack \
+    -rl editor \
+    -n '__fish_seen_subcommand_from edit'
+complete -c timetrack \
+    -rs e \
+    -n '__fish_seen_subcommand_from edit'
+complete -c timetrack \
     -fl help \
     -n '__fish_seen_subcommand_from edit'
 complete -c timetrack \
