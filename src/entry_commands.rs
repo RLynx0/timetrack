@@ -130,7 +130,10 @@ fn write_entry(entry: &ActivityEntry) -> Result<()> {
         .append(true)
         .open(path)?;
 
-    writeln!(&mut file, "{entry}")?;
+    match entry {
+        ActivityEntry::Start(_) => writeln!(&mut file, "{entry}")?,
+        ActivityEntry::End(_) => writeln!(&mut file, "{entry}\n")?,
+    }
     Ok(())
 }
 
