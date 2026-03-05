@@ -153,11 +153,11 @@ fn print_activitiy_table(activities: &[TrackedActivity]) -> Result<()> {
     print_smart_table! {
         "Date" => col_date,
         "Start" => col_start,
-        "End" => col_end,
         "Hours" => col_hours,
+        "End" => col_end,
         "Activity" => col_name,
-        "Attendance" => col_attendance,
         "WBS" => col_wbs,
+        "Attendance" => col_attendance,
         "Description" => col_description,
     }
 
@@ -213,8 +213,8 @@ fn print_collapsed_activity_table(collapsed_activities: &[CollapsedActivity]) ->
     print_smart_table! {
         "Date" => col_date,
         "Hours" => col_hours,
-        "Attendance" => col_attendance,
         "WBS" => col_wbs,
+        "Attendance" => col_attendance,
         "Description" => col_description,
     }
 
