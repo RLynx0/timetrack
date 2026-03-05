@@ -1,5 +1,5 @@
 use std::{
-    env, fs,
+    fs,
     io::{self, Write},
     path::Path,
     process::Command,
@@ -161,11 +161,16 @@ fn get_last_entry() -> Result<Option<ActivityEntry>> {
     if !fs::exists(path)? {
         return Ok(None);
     }
+
     let file = fs::File::open(path)?;
-    match RawRevLines::new(file).next() {
-        Some(l) => entry_from_byte_result(l),
-        None => Ok(None),
+    for byte_res in RawRevLines::new(file) {
+        match entry_from_byte_result(byte_res)? {
+            Some(entry) => return Ok(Some(entry)),
+            None => continue,
+        }
     }
+
+    Ok(None)
 }
 
 /// Get the last `count` activities in chronological order
