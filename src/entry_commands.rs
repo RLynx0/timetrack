@@ -160,7 +160,7 @@ fn get_last_entry() -> Result<Option<ActivityEntry>> {
     }
     let file = fs::File::open(path)?;
     match RawRevLines::new(file).next() {
-        Some(l) => Ok(Some(entry_from_byte_result(l)?)),
+        Some(l) => entry_from_byte_result(l),
         None => Ok(None),
     }
 }
@@ -180,7 +180,9 @@ fn get_last_n_activities(count: usize) -> Result<Vec<TrackedActivity>> {
     while let Some(line) = rev_lines.next()
         && activities.len() < count
     {
-        let entry = entry_from_byte_result(line)?;
+        let Some(entry) = entry_from_byte_result(line)? else {
+            continue;
+        };
         let end_timestamp = last_timestamp.take();
         last_timestamp = Some(*entry.time_stamp());
         if let ActivityEntry::Start(start_entry) = entry {
@@ -233,7 +235,9 @@ fn get_backwards_entries_since(start_time: &DateTime<Local>) -> Result<Vec<Activ
     let mut entries = Vec::new();
     let file = fs::File::open(path)?;
     for line in RawRevLines::new(file) {
-        let entry = entry_from_byte_result(line)?;
+        let Some(entry) = entry_from_byte_result(line)? else {
+            continue;
+        };
         let time = *entry.time_stamp();
         entries.push(entry);
         if &time <= start_time {
@@ -245,7 +249,11 @@ fn get_backwards_entries_since(start_time: &DateTime<Local>) -> Result<Vec<Activ
 
 fn entry_from_byte_result(
     byte_result: std::result::Result<Vec<u8>, io::Error>,
-) -> Result<ActivityEntry> {
+) -> Result<Option<ActivityEntry>> {
     let entry_str = String::from_utf8(byte_result?)?;
-    Ok(ActivityEntry::from_str(&entry_str)?)
+    if entry_str.trim().is_empty() {
+        Ok(None)
+    } else {
+        Ok(Some(ActivityEntry::from_str(&entry_str)?))
+    }
 }
