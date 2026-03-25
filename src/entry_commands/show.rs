@@ -74,18 +74,20 @@ fn show_activity_range(show_opts: &cli::Show, quantity: &ActivityRange) -> Resul
         return Ok(());
     }
 
-    match show_opts.mode {
-        cli::ShowMode::Entries => {
-            show_individual_activities(&activities, show_opts.machine_readable)?;
-        }
-        cli::ShowMode::Collapsed => {
-            show_collapsed_activities(&activities, show_opts.machine_readable)?;
-        }
-        cli::ShowMode::Attendance => {
-            show_daily_attendance(&activities, show_opts.machine_readable)?;
-        }
-        cli::ShowMode::Time => {
-            show_activity_time(&activities, show_opts.machine_readable);
+    for mode in &show_opts.mode {
+        match mode {
+            cli::ShowMode::Entries => {
+                show_individual_activities(&activities, show_opts.machine_readable)?;
+            }
+            cli::ShowMode::Collapsed => {
+                show_collapsed_activities(&activities, show_opts.machine_readable)?;
+            }
+            cli::ShowMode::Attendance => {
+                show_daily_attendance(&activities, show_opts.machine_readable)?;
+            }
+            cli::ShowMode::Time => {
+                show_activity_time(&activities, show_opts.machine_readable);
+            }
         }
     }
 

@@ -85,7 +85,7 @@ pub struct End {
 pub struct Show {
     /// Specify what you want to see
     #[clap(default_value = "entries")]
-    pub mode: ShowMode,
+    pub mode: Vec<ShowMode>,
 
     /// Specify how many results should be shown
     ///
