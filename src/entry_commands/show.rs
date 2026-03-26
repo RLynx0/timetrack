@@ -2,6 +2,7 @@ use std::rc::Rc;
 
 use chrono::{DurationRound, Local, TimeDelta};
 use color_eyre::eyre::Result;
+use itertools::Itertools;
 use owo_colors::{OwoColorize, Stream};
 
 use crate::{
@@ -74,7 +75,23 @@ fn show_activity_range(show_opts: &cli::Show, quantity: &ActivityRange) -> Resul
         return Ok(());
     }
 
-    for mode in &show_opts.mode {
+    for (i, mode) in show_opts.mode.iter().dedup().enumerate() {
+        if i > 0 {
+            println!()
+        }
+
+        if show_opts.mode.len() > 1 {
+            println!(
+                ":{}",
+                match mode {
+                    cli::ShowMode::Entries => "Entries",
+                    cli::ShowMode::Collapsed => "Collapsed",
+                    cli::ShowMode::Attendance => "Attendance",
+                    cli::ShowMode::Time => "Time",
+                }
+            )
+        }
+
         match mode {
             cli::ShowMode::Entries => {
                 show_individual_activities(&activities, show_opts.machine_readable)?;

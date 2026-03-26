@@ -106,7 +106,7 @@ pub struct Show {
     #[clap(short, long)]
     pub machine_readable: bool,
 }
-#[derive(Debug, Clone, ValueEnum)]
+#[derive(Debug, Clone, ValueEnum, PartialEq)]
 pub enum ShowMode {
     /// Show individual activity entries
     Entries,
