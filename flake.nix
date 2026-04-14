@@ -21,9 +21,14 @@
         };
 
         naersk' = pkgs.callPackage naersk {};
-      in rec {
+      in {
         defaultPackage = naersk'.buildPackage {
           src = ./.;
+
+          postInstall = /*sh*/ ''
+            mkdir -p $out/share/fish/vendor_completions.d
+            cp ${./assets/fish_completions.fish} $out/share/fish/vendor_completions.d/timetrack.fish
+          '';
         };
 
         devShell = pkgs.mkShell {
