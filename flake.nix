@@ -25,9 +25,11 @@
         defaultPackage = naersk'.buildPackage {
           src = ./.;
 
+          nativeBuildInputs = [ pkgs.installShellFiles ];
+
           postInstall = /*sh*/ ''
-            mkdir -p $out/share/fish/vendor_completions.d
-            cp ${./assets/fish_completions.fish} $out/share/fish/vendor_completions.d/timetrack.fish
+            installShellCompletion --cmd timetrack \
+              --fish ${./assets/fish_completions.fish}
           '';
         };
 
