@@ -6,28 +6,31 @@
     fenix.url = "github:nix-community/fenix";
   };
 
-  outputs = {
-    self,
-    flake-utils,
-    naersk,
-    nixpkgs,
-    fenix,
-  }:
+  outputs =
+    {
+      flake-utils,
+      naersk,
+      nixpkgs,
+      fenix,
+      ...
+    }:
     flake-utils.lib.eachDefaultSystem (
-      system: let
+      system:
+      let
         pkgs = (import nixpkgs) {
           inherit system;
-          overlays = [fenix.overlays.default];
+          overlays = [ fenix.overlays.default ];
         };
 
-        naersk' = pkgs.callPackage naersk {};
-      in {
+        naersk' = pkgs.callPackage naersk { };
+      in
+      {
         defaultPackage = naersk'.buildPackage {
           src = ./.;
 
           nativeBuildInputs = [ pkgs.installShellFiles ];
 
-          postInstall = /*sh*/ ''
+          postInstall = /* sh */ ''
             installShellCompletion --cmd timetrack \
               --fish ${./assets/fish_completions.fish}
           '';
