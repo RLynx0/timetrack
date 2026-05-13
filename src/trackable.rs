@@ -180,7 +180,7 @@ impl ActivityCategory {
                 .map(ActivityItemRef::Category)
                 .or(category.leafs.get(&part).map(ActivityItemRef::Leaf))
                 .ok_or_else(|| LookupError::NoSuchItem {
-                    path: path.iter().copied().map(Arc::from).collect(),
+                    path: path.iter().take(i).copied().map(Arc::from).collect(),
                     requested: Arc::from(path[i]),
                 })?;
         }

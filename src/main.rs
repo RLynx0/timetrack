@@ -57,7 +57,8 @@ fn handle_activity_command(activity_command: &cli::ActivityCommand) -> Result<()
     match activity_command {
         cli::ActivityCommand::Set(opts) => activity_commands::set_activity(opts)
             .wrap_err_with(|| format!("failed to set activity '{}'", opts.name)),
-        cli::ActivityCommand::Rm(_) => todo!(),
+        cli::ActivityCommand::Rm(opts) => activity_commands::remove_activity(opts)
+            .wrap_err_with(|| format!("failed to remove activity '{}", opts.name)),
         cli::ActivityCommand::Mv(_) => todo!(),
         cli::ActivityCommand::Ls(opts) => {
             activity_commands::list_activities(opts).wrap_err_with(|| match &opts.name {

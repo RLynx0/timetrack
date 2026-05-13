@@ -19,11 +19,24 @@ pub fn move_activity(move_opts: &cli::MoveActivity) -> Result<()> {
 }
 
 pub fn remove_activity(set_opts: &cli::RemoveActivity) -> Result<()> {
-    todo!()
+    let mut search_path = set_opts
+        .name
+        .split("/")
+        .filter(|s| !s.is_empty())
+        .collect::<Vec<_>>();
+    let leaf_name = search_path.pop();
+    let activities = get_all_trackable_activities()?;
+    let hierarchy = ActivityCategory::from(activities);
+    let parent_category = match hierarchy.get_item_at(&search_path)? {
+        ActivityItemRef::Category(c) => c,
+        ActivityItemRef::Leaf(l) => todo!("return error"),
+    };
+    dbg!(parent_category, leaf_name);
+    Ok(())
 }
 
-pub fn list_activities(opts: &cli::ListActivities) -> Result<()> {
-    let search_path = opts
+pub fn list_activities(ls_opts: &cli::ListActivities) -> Result<()> {
+    let search_path = ls_opts
         .name
         .as_deref()
         .map(|s| s.split("/").filter(|s| !s.is_empty()).collect::<Vec<_>>())
@@ -31,8 +44,10 @@ pub fn list_activities(opts: &cli::ListActivities) -> Result<()> {
     let activities = get_all_trackable_activities()?;
     let hierarchy = ActivityCategory::from(activities);
     match hierarchy.get_item_at(&search_path)? {
-        ActivityItemRef::Leaf(l) => print_single(l, opts.machine_readable),
-        ActivityItemRef::Category(c) => print_hierarchy(c, opts.recursive, opts.machine_readable),
+        ActivityItemRef::Leaf(l) => print_single(l, ls_opts.machine_readable),
+        ActivityItemRef::Category(c) => {
+            print_hierarchy(c, ls_opts.recursive, ls_opts.machine_readable)
+        }
     };
 
     Ok(())
