@@ -338,19 +338,19 @@ fn show_activity_time(activities: &[TrackedActivity], machine_readable: bool) {
 fn format_time_delta(delta: &TimeDelta) -> String {
     let mut out = String::new();
     let days = delta.num_days();
-    if days > 0 {
+    if days != 0 {
         out.push_str(&format!("{days}d "))
     }
 
     let rem = *delta - TimeDelta::days(days);
     let hours = rem.num_hours();
-    if hours > 0 {
+    if hours != 0 {
         out.push_str(&format!("{hours}h "))
     }
 
     let rem = rem - TimeDelta::hours(hours);
     let minutes = rem.num_minutes();
-    if minutes > 0 {
+    if minutes != 0 {
         out.push_str(&format!("{minutes}m "))
     }
 
