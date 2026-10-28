@@ -151,6 +151,10 @@ complete -c timetrack \
     -n '__fish_seen_subcommand_from activity' \
     -n '__fish_seen_subcommand_from ls'
 complete -c timetrack \
+    -fl collapsed -s c \
+    -n '__fish_seen_subcommand_from activity' \
+    -n '__fish_seen_subcommand_from ls'
+complete -c timetrack \
     -fl machine-readable -s m \
     -n '__fish_seen_subcommand_from activity' \
     -n '__fish_seen_subcommand_from ls'
@@ -162,3 +166,57 @@ complete -c timetrack \
     -fl version -s V \
     -n '__fish_seen_subcommand_from activity' \
     -n '__fish_seen_subcommand_from ls'
+
+# Subcommand activity set
+complete -c timetrack -f \
+    -n '__fish_seen_subcommand_from activity' \
+    -n '__fish_seen_subcommand_from set' \
+    -a '(__timetrack_activities)'
+complete -c timetrack \
+    -xl description -s d \
+    -n '__fish_seen_subcommand_from activity' \
+    -n '__fish_seen_subcommand_from set'
+complete -c timetrack \
+    -fl force -s f \
+    -n '__fish_seen_subcommand_from activity' \
+    -n '__fish_seen_subcommand_from set'
+complete -c timetrack \
+    -fl help -s h \
+    -n '__fish_seen_subcommand_from activity' \
+    -n '__fish_seen_subcommand_from set'
+complete -c timetrack \
+    -fl version -s V \
+    -n '__fish_seen_subcommand_from activity' \
+    -n '__fish_seen_subcommand_from set'
+
+# Subcommand activity rm
+complete -c timetrack -f \
+    -n '__fish_seen_subcommand_from activity' \
+    -n '__fish_seen_subcommand_from rm' \
+    -a '(__timetrack_activities)'
+complete -c timetrack \
+    -fl recursive -s r \
+    -n '__fish_seen_subcommand_from activity' \
+    -n '__fish_seen_subcommand_from rm'
+complete -c timetrack \
+    -fl help -s h \
+    -n '__fish_seen_subcommand_from activity' \
+    -n '__fish_seen_subcommand_from rm'
+complete -c timetrack \
+    -fl version -s V \
+    -n '__fish_seen_subcommand_from activity' \
+    -n '__fish_seen_subcommand_from rm'
+
+# Subcommand activity mv
+complete -c timetrack -f \
+    -n '__fish_seen_subcommand_from activity' \
+    -n '__fish_seen_subcommand_from mv' \
+    -a '(__timetrack_activities)'
+complete -c timetrack \
+    -fl help -s h \
+    -n '__fish_seen_subcommand_from activity' \
+    -n '__fish_seen_subcommand_from mv'
+complete -c timetrack \
+    -fl version -s V \
+    -n '__fish_seen_subcommand_from activity' \
+    -n '__fish_seen_subcommand_from mv'

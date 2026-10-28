@@ -21,6 +21,7 @@ use crate::{
     cli,
     files::{self, get_activity_file_path, get_entry_file_path, get_main_config_path},
     get_config, print_smart_list,
+    trackable::sanitize_description,
 };
 
 pub use generate::handle_generate;
@@ -84,10 +85,6 @@ pub fn start_activity(start_opts: &cli::Start) -> Result<()> {
         }
     }
     Ok(())
-}
-
-fn sanitize_description(description: &str) -> String {
-    description.replace("\t", "    ").replace("\n", " -- ")
 }
 
 pub fn end_activity(end_opts: &cli::End) -> Result<()> {

@@ -1,49 +1,198 @@
-use std::{fs, rc::Rc, str::FromStr};
+use std::{
+    fs,
+    io::Write,
+    path::Path,
+    rc::Rc,
+    str::FromStr,
+    time::{SystemTime, UNIX_EPOCH},
+};
 
-use color_eyre::eyre::{Result, format_err};
+use color_eyre::{
+    Section,
+    eyre::{Context, Result, format_err},
+    owo_colors::OwoColorize,
+};
+use owo_colors::Stream;
 
 use crate::{
     NONE_PRINT_VALUE, cli, files, print_smart_list, print_smart_table,
-    trackable::{Activity, ActivityCategory, ActivityItemRef, ActivityLeaf, PrintableActivityItem},
+    trackable::{
+        Activity, ActivityCategory, ActivityItemRef, ActivityLeaf, BUILTIN_ACTIVITY_IDLE_NAME,
+        LookupError, PrintableActivityItem,
+    },
 };
 
 #[cfg(test)]
 mod tests;
 
 pub fn set_activity(set_opts: &cli::SetActivity) -> Result<()> {
-    let activities = get_all_trackable_activities()?;
-    let hierarchy = ActivityCategory::from(activities);
-
-    todo!()
-}
-
-pub fn move_activity(move_opts: &cli::MoveActivity) -> Result<()> {
-    todo!()
-}
-
-pub fn remove_activity(set_opts: &cli::RemoveActivity) -> Result<()> {
-    let mut search_path = set_opts
-        .name
-        .split("/")
-        .filter(|s| !s.is_empty())
-        .collect::<Vec<_>>();
-    let leaf_name = search_path.pop();
-    let activities = get_all_trackable_activities()?;
-    let hierarchy = ActivityCategory::from(activities);
-    let parent_category = match hierarchy.get_item_at(&search_path)? {
-        ActivityItemRef::Category(c) => c,
-        ActivityItemRef::Leaf(l) => todo!("return error"),
+    let activity = Activity::new(
+        &split_path(&set_opts.name),
+        &set_opts.wbs,
+        set_opts.description.as_deref(),
+    )?;
+    let name = activity.full_path();
+    let (activities, outcome) = apply_set(get_stored_activities()?, activity, set_opts.force)?;
+    write_stored_activities(&activities)?;
+    let action = match outcome {
+        SetOutcome::Added => "Added",
+        SetOutcome::Updated => "Updated",
     };
-    dbg!(parent_category, leaf_name);
+    println!(
+        "{action} activity '{}'",
+        name.if_supports_color(Stream::Stdout, |n| n.green())
+    );
     Ok(())
 }
 
+pub fn move_activity(move_opts: &cli::MoveActivity) -> Result<()> {
+    let from = split_path(&move_opts.from);
+    let to = split_path(&move_opts.to);
+    let (activities, destination) = apply_move(get_stored_activities()?, &from, &to)?;
+    write_stored_activities(&activities)?;
+    println!(
+        "Moved '{}' to '{}'",
+        from.join("/")
+            .if_supports_color(Stream::Stdout, |n| n.red()),
+        destination.if_supports_color(Stream::Stdout, |n| n.green())
+    );
+    Ok(())
+}
+
+pub fn remove_activity(remove_opts: &cli::RemoveActivity) -> Result<()> {
+    let path = split_path(&remove_opts.name);
+    let (activities, count) = apply_remove(get_stored_activities()?, &path, remove_opts.recursive)?;
+    write_stored_activities(&activities)?;
+    let noun = if count == 1 { "activity" } else { "activities" };
+    println!(
+        "Removed {count} {noun} at '{}'",
+        path.join("/")
+            .if_supports_color(Stream::Stdout, |n| n.red())
+    );
+    Ok(())
+}
+
+fn split_path(path: &str) -> Vec<&str> {
+    path.split('/').filter(|part| !part.is_empty()).collect()
+}
+
+fn check_mutable_path(path: &[&str]) -> Result<()> {
+    if path.is_empty() {
+        return Err(format_err!("activity path must not be empty"));
+    }
+    if path[0] == BUILTIN_ACTIVITY_IDLE_NAME {
+        return Err(format_err!(
+            "the builtin 'idle' activity cannot be modified"
+        ));
+    }
+    Ok(())
+}
+
+#[derive(Debug, PartialEq)]
+enum SetOutcome {
+    Added,
+    Updated,
+}
+
+fn apply_set(
+    mut activities: Vec<Activity>,
+    activity: Activity,
+    force: bool,
+) -> Result<(Vec<Activity>, SetOutcome)> {
+    let path = activity.path_segments();
+    check_mutable_path(&path)?;
+    let hierarchy =
+        ActivityCategory::from(activities.iter().cloned().chain([Activity::builtin_idle()]));
+    let outcome = match hierarchy.get_item_at(&path) {
+        Ok(ActivityItemRef::Category(_)) => {
+            return Err(format_err!("{} is an activity category", path.join("/")));
+        }
+        Ok(ActivityItemRef::Leaf(_)) if !force => {
+            return Err(format_err!("activity '{}' already exists", path.join("/")))
+                .with_note(|| "use --force to overwrite an existing activity");
+        }
+        Ok(ActivityItemRef::Leaf(_)) => {
+            for existing in &mut activities {
+                if existing.path_segments() == path {
+                    *existing = activity.clone();
+                }
+            }
+            SetOutcome::Updated
+        }
+        Err(LookupError::NoSuchItem { .. }) => {
+            activities.push(activity);
+            SetOutcome::Added
+        }
+        Err(error) => return Err(error.into()),
+    };
+    Ok((activities, outcome))
+}
+
+fn apply_remove(
+    mut activities: Vec<Activity>,
+    path: &[&str],
+    recursive: bool,
+) -> Result<(Vec<Activity>, usize)> {
+    check_mutable_path(path)?;
+    let hierarchy =
+        ActivityCategory::from(activities.iter().cloned().chain([Activity::builtin_idle()]));
+    if matches!(hierarchy.get_item_at(path)?, ActivityItemRef::Category(_)) && !recursive {
+        return Err(format_err!("{} is an activity category", path.join("/")))
+            .with_note(|| "use --recursive to remove a category and all its activities");
+    }
+    let original_count = activities.len();
+    activities.retain(|activity| !activity.path_segments().starts_with(path));
+    let removed = original_count - activities.len();
+    Ok((activities, removed))
+}
+
+fn apply_move(
+    activities: Vec<Activity>,
+    from: &[&str],
+    to: &[&str],
+) -> Result<(Vec<Activity>, String)> {
+    check_mutable_path(from)?;
+    let hierarchy =
+        ActivityCategory::from(activities.iter().cloned().chain([Activity::builtin_idle()]));
+    hierarchy.get_item_at(from)?;
+    let mut destination = to.to_vec();
+    match hierarchy.get_item_at(to) {
+        Ok(ActivityItemRef::Category(_)) => destination.push(from[from.len() - 1]),
+        Ok(ActivityItemRef::Leaf(_)) => {
+            return Err(format_err!("activity '{}' already exists", to.join("/")));
+        }
+        Err(LookupError::NoSuchItem { .. }) => {}
+        Err(error) => return Err(error.into()),
+    }
+    check_mutable_path(&destination)?;
+    if destination.starts_with(from) {
+        return Err(format_err!(
+            "cannot move an activity or category into itself"
+        ));
+    }
+    match hierarchy.get_item_at(&destination) {
+        Ok(_) => {
+            return Err(format_err!(
+                "destination '{}' already exists",
+                destination.join("/")
+            ));
+        }
+        Err(LookupError::NoSuchItem { .. }) => {}
+        Err(error) => return Err(error.into()),
+    }
+    let activities = activities
+        .into_iter()
+        .map(|activity| {
+            activity
+                .relocated(from, &destination)
+                .map(|relocated| relocated.unwrap_or(activity))
+        })
+        .collect::<std::result::Result<Vec<_>, _>>()?;
+    Ok((activities, destination.join("/")))
+}
+
 pub fn list_activities(ls_opts: &cli::ListActivities) -> Result<()> {
-    let search_path = ls_opts
-        .name
-        .as_deref()
-        .map(|s| s.split("/").filter(|s| !s.is_empty()).collect::<Vec<_>>())
-        .unwrap_or_default();
+    let search_path = ls_opts.name.as_deref().map(split_path).unwrap_or_default();
     let activities = get_all_trackable_activities()?;
     let hierarchy = ActivityCategory::from(activities);
     let list_mode = match (ls_opts.recursive, ls_opts.collapsed) {
@@ -189,15 +338,58 @@ pub fn get_trackable_activity(activity_path: &str) -> Result<Activity> {
 }
 
 pub fn get_all_trackable_activities() -> Result<Vec<Activity>> {
+    let mut activities = get_stored_activities()?;
+    activities.push(Activity::builtin_idle());
+    Ok(activities)
+}
+
+fn get_stored_activities() -> Result<Vec<Activity>> {
     let path = files::get_activity_file_path()?;
-    let builtin_idle = Activity::builtin_idle();
     if !fs::exists(&path)? {
-        return Ok(vec![builtin_idle]);
+        return Ok(Vec::new());
     }
-    let mut activities = fs::read_to_string(path)?
+    let activities = fs::read_to_string(path)?
         .lines()
         .map(Activity::from_str)
         .collect::<std::result::Result<Vec<_>, _>>()?;
-    activities.push(builtin_idle);
     Ok(activities)
+}
+
+fn write_stored_activities(activities: &[Activity]) -> Result<()> {
+    write_activities_to(&files::get_activity_file_path()?, activities)
+}
+
+fn write_activities_to(path: &Path, activities: &[Activity]) -> Result<()> {
+    if let Some(parent) = path.parent() {
+        fs::create_dir_all(parent)?;
+    }
+    let timestamp = SystemTime::now().duration_since(UNIX_EPOCH)?.as_nanos();
+    let temporary_path = path.with_file_name(format!(
+        ".activities.{}.{timestamp}.tmp",
+        std::process::id()
+    ));
+    let mut file = fs::OpenOptions::new()
+        .write(true)
+        .create_new(true)
+        .open(&temporary_path)?;
+    let result = (|| -> Result<()> {
+        match fs::metadata(path) {
+            Ok(metadata) => file.set_permissions(metadata.permissions())?,
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
+            Err(error) => return Err(error.into()),
+        }
+        for activity in activities {
+            writeln!(file, "{activity}")?;
+        }
+        file.sync_all()?;
+        drop(file);
+        fs::rename(&temporary_path, path)?;
+        Ok(())
+    })();
+    if let Err(error) = result {
+        fs::remove_file(&temporary_path)
+            .wrap_err_with(|| format!("failed to clean up {temporary_path:?} after: {error:#}"))?;
+        return Err(error);
+    }
+    Ok(())
 }

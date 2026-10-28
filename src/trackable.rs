@@ -15,6 +15,8 @@ pub enum ParseActivityErr {
     MissingPath,
     NoNameInPath,
     MissingWbs,
+    InvalidPathSegment,
+    InvalidWbs,
 }
 impl error::Error for ParseActivityErr {}
 impl Display for ParseActivityErr {
@@ -23,6 +25,13 @@ impl Display for ParseActivityErr {
             ParseActivityErr::MissingPath => write!(f, "missing path"),
             ParseActivityErr::MissingWbs => write!(f, "missing wbs"),
             ParseActivityErr::NoNameInPath => write!(f, "path doesn't end in a name"),
+            ParseActivityErr::InvalidPathSegment => {
+                write!(
+                    f,
+                    "activity path segments must be nonempty and contain no '/', tabs or newlines"
+                )
+            }
+            ParseActivityErr::InvalidWbs => write!(f, "wbs must contain no tabs or newlines"),
         }
     }
 }
@@ -33,6 +42,39 @@ pub struct Activity {
     leaf: ActivityLeaf,
 }
 impl Activity {
+    pub fn new(
+        path: &[&str],
+        wbs: &str,
+        description: Option<&str>,
+    ) -> Result<Self, ParseActivityErr> {
+        let Some((name, parents)) = path.split_last() else {
+            return Err(ParseActivityErr::MissingPath);
+        };
+        if path
+            .iter()
+            .any(|part| part.is_empty() || part.contains(['/', '\t', '\n', '\r']))
+        {
+            return Err(ParseActivityErr::InvalidPathSegment);
+        }
+        if wbs.is_empty() {
+            return Err(ParseActivityErr::MissingWbs);
+        }
+        if wbs.contains(['\t', '\n', '\r']) {
+            return Err(ParseActivityErr::InvalidWbs);
+        }
+        Ok(Activity {
+            path: parents.iter().copied().map(Rc::from).collect(),
+            leaf: ActivityLeaf {
+                name: Rc::from(*name),
+                wbs: Rc::from(wbs),
+                default_description: description
+                    .map(sanitize_description)
+                    .filter(|s| !s.is_empty())
+                    .map(Rc::from),
+            },
+        })
+    }
+
     pub fn builtin_idle() -> Self {
         Activity {
             path: VecDeque::new(),
@@ -48,9 +90,26 @@ impl Activity {
         let path: String = self.path.iter().map(|n| format!("{n}/")).collect();
         format!("{}{}", path, self.leaf.name)
     }
+    pub fn path_segments(&self) -> Vec<&str> {
+        self.path
+            .iter()
+            .map(|part| part.as_ref())
+            .chain(std::iter::once(self.leaf_name()))
+            .collect()
+    }
+
+    pub fn relocated(&self, from: &[&str], to: &[&str]) -> Result<Option<Self>, ParseActivityErr> {
+        let path = self.path_segments();
+        if !path.starts_with(from) {
+            return Ok(None);
+        }
+        let destination: Vec<_> = to.iter().chain(&path[from.len()..]).copied().collect();
+        Self::new(&destination, self.wbs(), self.description()).map(Some)
+    }
     pub fn leaf_name(&self) -> &str {
         &self.leaf.name
     }
+
     pub fn wbs(&self) -> &str {
         &self.leaf.wbs
     }
@@ -58,6 +117,13 @@ impl Activity {
         self.leaf.default_description.as_deref()
     }
 }
+pub fn sanitize_description(description: &str) -> String {
+    description
+        .replace('\t', "    ")
+        .replace("\r\n", " -- ")
+        .replace(['\n', '\r'], " -- ")
+}
+
 impl From<ActivityLeaf> for Activity {
     fn from(leaf: ActivityLeaf) -> Self {
         Activity {
@@ -121,7 +187,7 @@ impl Display for LookupError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             LookupError::NotACategory(path) => {
-                writeln!(f, "{} is not an activity category", path.join("/"))
+                write!(f, "{} is not an activity category", path.join("/"))
             }
             LookupError::NoSuchItem { path, requested } if path.is_empty() => {
                 write!(f, "{requested} does not exist")
@@ -170,7 +236,7 @@ impl ActivityCategory {
         for (i, part) in path.iter().copied().map(Rc::from).enumerate() {
             let category = match out {
                 ActivityItemRef::Leaf(_) => Err(LookupError::NotACategory(
-                    path.iter().copied().map(Arc::from).collect(),
+                    path.iter().take(i).copied().map(Arc::from).collect(),
                 )),
                 ActivityItemRef::Category(category) => Ok(category),
             }?;

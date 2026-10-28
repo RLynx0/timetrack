@@ -152,6 +152,8 @@ pub struct Generate {
 }
 
 /// Define a new trackable activity
+///
+/// Missing categories in the activity path are created automatically.
 #[derive(Debug, Clone, Parser)]
 pub struct SetActivity {
     /// The name of the trackable activity
@@ -164,7 +166,7 @@ pub struct SetActivity {
     #[clap(short, long)]
     pub description: Option<String>,
 
-    /// Allow overwriting existing activities
+    /// Allow overwriting an existing activity, but not a category
     #[clap(short, long)]
     pub force: bool,
 }
@@ -184,16 +186,16 @@ pub struct RemoveActivity {
     pub recursive: bool,
 }
 
-/// Rename a specified trackable activity
+/// Move or rename a trackable activity or category
 ///
 /// Existing entries using this activity will retain the old name
 #[derive(Debug, Clone, Parser)]
 #[clap(verbatim_doc_comment)]
 pub struct MoveActivity {
-    /// The name of the activity to rename
+    /// The path of the activity or category to move
     pub from: String,
 
-    /// The new name of the activity
+    /// The new path, or an existing category to move into
     pub to: String,
 }
 
@@ -210,9 +212,9 @@ pub struct ListActivities {
     /// Show contents of activity categories
     #[clap(short, long)]
     pub recursive: bool,
-    
+
     /// Collapse activity categories with only one entry
-    /// 
+    ///
     /// Does nothing when --recursive is passed.
     #[clap(short, long)]
     pub collapsed: bool,
