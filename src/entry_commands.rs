@@ -145,7 +145,7 @@ pub fn handle_edit(edit_opts: &cli::Edit) -> Result<()> {
 
 /// Opens the activity log with `EDITOR`
 fn open_editor_to_file(editor: &str, path: &Path) -> Result<()> {
-    _ = Command::new(&editor)
+    _ = Command::new(editor)
         .arg(path)
         .status()
         .map_err(|e| format_err!("Failed to open {editor}: {e}"))?;
@@ -170,6 +170,78 @@ fn get_last_entry() -> Result<Option<ActivityEntry>> {
     Ok(None)
 }
 
+fn get_last_activity() -> Result<Option<TrackedActivity>> {
+    let path = files::get_entry_file_path()?;
+    if !fs::exists(&path)? {
+        return Ok(None);
+    }
+    let mut end = None;
+    for line in RawRevLines::new(fs::File::open(path)?) {
+        if let Some(entry) = entry_from_byte_result(line)? {
+            let timestamp = *entry.time_stamp();
+            if let ActivityEntry::Start(start) = entry {
+                return Ok(Some(TrackedActivity::new(start, end)));
+            }
+            end = Some(timestamp);
+        }
+    }
+    Ok(None)
+}
+
+fn get_last_activities_until<T>(
+    mut select: impl FnMut(&[TrackedActivity], bool) -> Option<T>,
+) -> Result<T> {
+    let mut count = 32;
+    loop {
+        let activities = get_last_n_activities(count)?;
+        let exhausted = activities.len() < count;
+        if let Some(selected) = select(&activities, exhausted) {
+            return Ok(selected);
+        }
+        count = count
+            .checked_mul(2)
+            .ok_or_else(|| format_err!("Too many activities"))?;
+    }
+}
+
+fn get_activities_between(
+    start: Option<DateTime<Local>>,
+    end: DateTime<Local>,
+    now: DateTime<Local>,
+) -> Result<Vec<TrackedActivity>> {
+    let path = files::get_entry_file_path()?;
+    if !fs::exists(&path)? {
+        return Ok(Vec::new());
+    }
+    let mut activities = Vec::new();
+    let mut next_timestamp = None;
+    for line in RawRevLines::new(fs::File::open(path)?) {
+        let Some(entry) = entry_from_byte_result(line)? else {
+            continue;
+        };
+        let timestamp = *entry.time_stamp();
+        if let ActivityEntry::Start(activity) = entry
+            && let Some(clipped) =
+                TrackedActivity::new(activity, next_timestamp).clipped(start, end, now)
+        {
+            activities.extend(
+                clipped
+                    .split_on_midnight(end)
+                    .filter(|a| a.end_time().is_none_or(|to| a.start_time() < to))
+                    .collect::<Vec<_>>()
+                    .into_iter()
+                    .rev(),
+            );
+        }
+        next_timestamp = Some(timestamp);
+        if start.is_some_and(|start| timestamp <= start) {
+            break;
+        }
+    }
+    activities.reverse();
+    Ok(activities)
+}
+
 /// Get the last `count` activities in chronological order
 /// Activities crossing over midnight will be automatically split
 fn get_last_n_activities(count: usize) -> Result<Vec<TrackedActivity>> {
@@ -177,7 +249,6 @@ fn get_last_n_activities(count: usize) -> Result<Vec<TrackedActivity>> {
     if !fs::exists(path)? {
         return Ok(Vec::new());
     }
-
     let file = fs::File::open(path)?;
     let mut rev_lines = RawRevLines::new(file);
     let mut activities = Vec::new();

@@ -94,19 +94,33 @@ pub struct Show {
     /// - <n>d | <n>days     Show results in the last <n> days
     /// - <n>w | <n>weeks    Show results in the last <n> weeks
     /// - <n>m | <n>months   Show results in the last <n> months
-    /// - 0                  Show the currently active result
+    /// - 0                  Show the latest result for each mode
     /// - hour               Show results from the current hour
     /// - day                Show results from the current day
     /// - week               Show results from the current week
     /// - month              Show results from the current month
-    #[clap(verbatim_doc_comment, short, long, default_value = "0")]
-    pub last: ActivityRange,
+    ///
+    /// Counts select collapsed rows or attendance ranges in those modes.
+    #[clap(verbatim_doc_comment, short, long, conflicts_with_all = ["from", "to", "in"])]
+    pub last: Option<ActivityRange>,
+
+    /// Start at this bucket (1m, week, YYYY, YYYY-MM or YYYY-MM-DD)
+    #[clap(long)]
+    pub from: Option<crate::time_window::TimePoint>,
+
+    /// Include through this entire bucket; without --from, start at the beginning of data
+    #[clap(long)]
+    pub to: Option<crate::time_window::TimePoint>,
+
+    /// Select one entire bucket, e.g. --in 1m for the last full month
+    #[clap(long = "in", conflicts_with_all = ["from", "to"])]
+    pub r#in: Option<crate::time_window::TimePoint>,
 
     /// Print machine readable values instead of a formatted table
     #[clap(short, long)]
     pub machine_readable: bool,
 }
-#[derive(Debug, Clone, ValueEnum, PartialEq)]
+#[derive(Debug, Clone, ValueEnum, PartialEq, Eq, Hash)]
 pub enum ShowMode {
     /// Show individual activity entries
     Entries,

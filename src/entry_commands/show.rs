@@ -11,21 +11,148 @@ use crate::{
         ActivityEntry, TrackedActivity,
         activity_groupings::{
             AttendanceRange, CollapsedActivity, collapse_activities, get_attendance_ranges,
+            latest_attendance_ranges, latest_collapsed,
         },
     },
     activity_range::ActivityRange,
     cli, get_config, print_smart_list, print_smart_table,
+    time_window::TimeWindow,
 };
 
-use super::{get_activities_since, get_last_entry, get_last_n_activities};
+use super::{
+    get_activities_between, get_activities_since, get_last_activities_until, get_last_activity,
+    get_last_entry, get_last_n_activities,
+};
 
 pub fn show_activities(show_opts: &cli::Show) -> Result<()> {
-    match &show_opts.last {
-        ActivityRange::Count(0) => show_current_entry(show_opts),
-        range => show_activity_range(show_opts, range),
+    let now = Local::now();
+    let window = if let Some(point) = &show_opts.r#in {
+        Some(TimeWindow {
+            from: Some(point.clone()),
+            to: Some(point.clone()),
+        })
+    } else if show_opts.from.is_some() || show_opts.to.is_some() {
+        Some(TimeWindow {
+            from: show_opts.from.clone(),
+            to: show_opts.to.clone(),
+        })
+    } else {
+        None
+    };
+    let window_activities = window
+        .map(|w| {
+            let (start, end) = w.resolve(now)?;
+            get_activities_between(start, end, now)
+        })
+        .transpose()?;
+    let latest = window_activities.is_none()
+        && matches!(show_opts.last, None | Some(ActivityRange::Count(0)));
+    let count = match show_opts.last {
+        Some(ActivityRange::Count(n)) if n < 0 => {
+            return Err(color_eyre::eyre::format_err!(
+                "Activity count must not be negative"
+            ));
+        }
+        Some(ActivityRange::Count(n)) if n > 0 => usize::try_from(n)?,
+        _ => 1,
+    };
+    let timeframe_activities = match &show_opts.last {
+        Some(ActivityRange::Timeframe(tf)) => Some(get_activities_since(&tf.back_from(&now))?),
+        _ => None,
+    };
+    let ranged = window_activities.as_ref().or(timeframe_activities.as_ref());
+
+    for (i, mode) in show_opts.mode.iter().unique().enumerate() {
+        if i > 0 {
+            println!();
+        }
+        if show_opts.mode.len() > 1 {
+            println!(
+                ":{}",
+                match mode {
+                    cli::ShowMode::Entries => "Entries",
+                    cli::ShowMode::Collapsed => "Collapsed",
+                    cli::ShowMode::Attendance => "Attendance",
+                    cli::ShowMode::Time => "Time",
+                }
+            );
+        }
+        if let Some(activities) = ranged {
+            if activities.is_empty() {
+                show_empty()?;
+                continue;
+            }
+            match mode {
+                cli::ShowMode::Entries => {
+                    show_individual_activities(activities, show_opts.machine_readable)?
+                }
+                cli::ShowMode::Collapsed => {
+                    show_collapsed_activities(activities, show_opts.machine_readable)?
+                }
+                cli::ShowMode::Attendance => {
+                    show_daily_attendance(activities, show_opts.machine_readable)?
+                }
+                cli::ShowMode::Time => show_activity_time(activities, show_opts.machine_readable),
+            }
+            continue;
+        }
+        match mode {
+            cli::ShowMode::Entries if latest => show_current_entry(show_opts)?,
+            cli::ShowMode::Entries | cli::ShowMode::Time => {
+                let activities = if latest {
+                    get_last_activity()?.into_iter().collect()
+                } else {
+                    get_last_n_activities(count)?
+                };
+                if activities.is_empty() {
+                    show_empty()?;
+                } else if *mode == cli::ShowMode::Time {
+                    show_activity_time(&activities, show_opts.machine_readable);
+                } else {
+                    show_individual_activities(&activities, show_opts.machine_readable)?;
+                }
+            }
+            cli::ShowMode::Collapsed => {
+                let rows = get_last_activities_until(|activities, exhausted| {
+                    latest_collapsed(activities, count, exhausted, now)
+                })?;
+                if rows.is_empty() {
+                    show_empty()?;
+                } else if show_opts.machine_readable {
+                    for row in rows {
+                        println!("{row}");
+                    }
+                } else {
+                    print_collapsed_activity_table(&rows, latest)?;
+                }
+            }
+            cli::ShowMode::Attendance => {
+                let rows = get_last_activities_until(|activities, exhausted| {
+                    latest_attendance_ranges(activities, count, exhausted)
+                })?;
+                if rows.is_empty() {
+                    show_empty()?;
+                } else if show_opts.machine_readable {
+                    for row in rows {
+                        println!("{row}");
+                    }
+                } else {
+                    print_attendance_table(&rows, latest)?;
+                }
+            }
+        }
     }
+    Ok(())
 }
 
+fn show_empty() -> Result<()> {
+    if get_last_entry()?.is_none() {
+        println!("You have not recorded any data yet");
+    } else {
+        println!("You have not recorded any data in the requested timeframe");
+    }
+    Ok(())
+}
 fn show_current_entry(show_opts: &cli::Show) -> Result<()> {
     let entry = get_last_entry()?;
     match entry {
@@ -57,57 +184,6 @@ fn show_current_entry(show_opts: &cli::Show) -> Result<()> {
             }
         }
     }
-    Ok(())
-}
-
-fn show_activity_range(show_opts: &cli::Show, quantity: &ActivityRange) -> Result<()> {
-    let activities = match quantity {
-        ActivityRange::Count(n) => get_last_n_activities(*n as usize)?,
-        ActivityRange::Timeframe(tf) => get_activities_since(&tf.back_from(&Local::now()))?,
-    };
-
-    if activities.is_empty() {
-        if get_last_entry()?.is_none() {
-            println!("You have not recorded any data yet")
-        } else {
-            println!("You have not recorded any data in the requested timeframe");
-        }
-        return Ok(());
-    }
-
-    for (i, mode) in show_opts.mode.iter().dedup().enumerate() {
-        if i > 0 {
-            println!()
-        }
-
-        if show_opts.mode.len() > 1 {
-            println!(
-                ":{}",
-                match mode {
-                    cli::ShowMode::Entries => "Entries",
-                    cli::ShowMode::Collapsed => "Collapsed",
-                    cli::ShowMode::Attendance => "Attendance",
-                    cli::ShowMode::Time => "Time",
-                }
-            )
-        }
-
-        match mode {
-            cli::ShowMode::Entries => {
-                show_individual_activities(&activities, show_opts.machine_readable)?;
-            }
-            cli::ShowMode::Collapsed => {
-                show_collapsed_activities(&activities, show_opts.machine_readable)?;
-            }
-            cli::ShowMode::Attendance => {
-                show_daily_attendance(&activities, show_opts.machine_readable)?;
-            }
-            cli::ShowMode::Time => {
-                show_activity_time(&activities, show_opts.machine_readable);
-            }
-        }
-    }
-
     Ok(())
 }
 
@@ -194,13 +270,16 @@ fn show_collapsed_activities(activities: &[TrackedActivity], machine_readable: b
             println!("{collapsed}");
         }
     } else {
-        print_collapsed_activity_table(&collapsed_activities)?
+        print_collapsed_activity_table(&collapsed_activities, false)?
     }
 
     Ok(())
 }
 
-fn print_collapsed_activity_table(collapsed_activities: &[CollapsedActivity]) -> Result<()> {
+fn print_collapsed_activity_table(
+    collapsed_activities: &[CollapsedActivity],
+    single: bool,
+) -> Result<()> {
     let mut col_date: Vec<Rc<str>> = Vec::new();
     let mut col_hours: Vec<Rc<str>> = Vec::new();
     let mut col_attendance: Vec<Rc<str>> = Vec::new();
@@ -229,6 +308,16 @@ fn print_collapsed_activity_table(collapsed_activities: &[CollapsedActivity]) ->
         });
     }
 
+    if single {
+        print_smart_list! {
+            "Date" => &col_date[0],
+            "Hours" => &col_hours[0],
+            "WBS" => &col_wbs[0],
+            "Attendance" => &col_attendance[0],
+            "Description" => &col_description[0],
+        }
+        return Ok(());
+    }
     print_smart_table! {
         "Date" => col_date,
         "Hours" => col_hours,
@@ -251,13 +340,13 @@ fn show_daily_attendance(activities: &[TrackedActivity], machine_readable: bool)
             println!("{range}");
         }
     } else {
-        print_attendance_table(&ranges)?;
+        print_attendance_table(&ranges, false)?;
     }
 
     Ok(())
 }
 
-fn print_attendance_table(ranges: &[AttendanceRange]) -> Result<()> {
+fn print_attendance_table(ranges: &[AttendanceRange], single: bool) -> Result<()> {
     let mut col_date: Vec<Rc<str>> = Vec::new();
     let mut col_start: Vec<Rc<str>> = Vec::new();
     let mut col_end: Vec<Rc<str>> = Vec::new();
@@ -301,6 +390,17 @@ fn print_attendance_table(ranges: &[AttendanceRange]) -> Result<()> {
         col_attendance.push(attendance_str.into());
     }
 
+    if single {
+        print_smart_list! {
+            "Date" => &col_date[0],
+            "Start" => &col_start[0],
+            "End" => &col_end[0],
+            "Hours" => &col_hours[0],
+            "Adjusted Hours" => &col_hours_adjusted[0],
+            "Attendance" => &col_attendance[0],
+        }
+        return Ok(());
+    }
     print_smart_table! {
         "Date" => col_date,
         "Start" => col_start,

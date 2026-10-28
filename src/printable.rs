@@ -46,7 +46,7 @@ struct TableCapOptions {
     hu: char,
 }
 impl TableCharOptions {
-    pub fn sharp() -> Self {
+    pub fn _sharp() -> Self {
         TableCharOptions {
             caps: Some(TableCapOptions {
                 dr: '┌',

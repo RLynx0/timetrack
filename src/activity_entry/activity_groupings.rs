@@ -68,7 +68,7 @@ pub fn collapse_activities(
                 wbs: activity.wbs().into(),
             })
             .duration +=
-            activity.end_time().copied().unwrap_or(Local::now()) - activity.start_time();
+            activity.end_time().copied().unwrap_or(end_fallback) - activity.start_time();
     }
 
     let mut grouped_activities = Vec::from_iter(grouped_activities.into_values());
@@ -148,3 +148,46 @@ pub fn get_attendance_ranges(activities: &[TrackedActivity]) -> Vec<AttendanceRa
     ranges.extend(last_range);
     ranges
 }
+
+pub fn latest_collapsed(
+    activities: &[TrackedActivity],
+    count: usize,
+    exhausted: bool,
+    now: DateTime<Local>,
+) -> Option<Vec<CollapsedActivity>> {
+    let mut keys = Vec::new();
+    for activity in activities.iter().rev() {
+        let key = ActivityGroupKey::from(activity);
+        if keys.len() < count && !keys.contains(&key) {
+            keys.push(key);
+        }
+    }
+    if !exhausted {
+        let oldest_date = keys.iter().map(|k| k.date).min()?;
+        if keys.len() < count || activities.first()?.start_time().date_naive() >= oldest_date {
+            return None;
+        }
+    }
+    let selected: Vec<_> = activities
+        .iter()
+        .filter(|a| keys.contains(&ActivityGroupKey::from(*a)))
+        .cloned()
+        .collect();
+    Some(collapse_activities(&selected, now))
+}
+
+pub fn latest_attendance_ranges(
+    activities: &[TrackedActivity],
+    count: usize,
+    exhausted: bool,
+) -> Option<Vec<AttendanceRange>> {
+    let mut ranges = get_attendance_ranges(activities);
+    if !exhausted && ranges.len() <= count {
+        return None;
+    }
+    let skip = ranges.len().saturating_sub(count);
+    Some(ranges.drain(skip..).collect())
+}
+
+#[cfg(test)]
+mod tests;

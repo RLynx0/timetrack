@@ -118,11 +118,23 @@ complete -c timetrack \
     -n '__fish_seen_subcommand_from edit'
 
 # Subcommand show
+function __timetrack_time_point_suggestions
+    __timetrack_range_suggestions | string match -rv '^[0-9]+$'
+    date +%Y
+    date +%Y-%m
+    date +%Y-%m-%d
+end
+for option in from to in
+    complete -c timetrack -xl $option \
+        -n '__fish_seen_subcommand_from show' \
+        -a '(__timetrack_time_point_suggestions)'
+end
 complete -c timetrack -f \
     -n '__fish_seen_subcommand_from show' \
     -a '(__timetrack_show_modes)'
 complete -c timetrack \
     -xl last -s l \
+    -d 'Last results (collapsed rows / attendance ranges in those modes)' \
     -n '__fish_seen_subcommand_from show' \
     -a '(__timetrack_range_suggestions)'
 complete -c timetrack \

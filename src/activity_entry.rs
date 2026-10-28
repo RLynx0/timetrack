@@ -56,6 +56,29 @@ impl TrackedActivity {
         }
     }
 
+    pub fn clipped(
+        &self,
+        start: Option<DateTime<Local>>,
+        end: DateTime<Local>,
+        now: DateTime<Local>,
+    ) -> Option<Self> {
+        let from = start
+            .map(|s| s.max(*self.start_time()))
+            .unwrap_or(*self.start_time());
+        let clipped_end = self
+            .end
+            .map(|activity_end| activity_end.min(end))
+            .or_else(|| (end < now).then_some(end));
+        let to = clipped_end.unwrap_or(now.min(end));
+        if from >= to {
+            return None;
+        }
+        Some(Self::new(
+            self.start_entry.with_timestamp(from),
+            clipped_end,
+        ))
+    }
+
     pub fn split_on_midnight(self, end_fallback: DateTime<Local>) -> SplitActivity {
         SplitActivity {
             current_start: Some(self.start_entry),
