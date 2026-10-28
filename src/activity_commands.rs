@@ -43,11 +43,14 @@ pub fn list_activities(ls_opts: &cli::ListActivities) -> Result<()> {
         .unwrap_or_default();
     let activities = get_all_trackable_activities()?;
     let hierarchy = ActivityCategory::from(activities);
+    let list_mode = match (ls_opts.recursive, ls_opts.collapsed) {
+        (true, _) => HierarchyListMode::Recursive,
+        (_, true) => HierarchyListMode::Collapsed,
+        _ => HierarchyListMode::Flat,
+    };
     match hierarchy.get_item_at(&search_path)? {
         ActivityItemRef::Leaf(l) => print_single(l, ls_opts.machine_readable),
-        ActivityItemRef::Category(c) => {
-            print_hierarchy(c, ls_opts.recursive, ls_opts.machine_readable)
-        }
+        ActivityItemRef::Category(c) => print_hierarchy(c, list_mode, ls_opts.machine_readable),
     };
 
     Ok(())
@@ -65,22 +68,38 @@ fn print_single(leaf: &ActivityLeaf, machine_readable: bool) {
     }
 }
 
-fn print_hierarchy(hierarchy: &ActivityCategory, recursive: bool, machine_readable: bool) {
-    if recursive {
-        let expanded = hierarchy.to_activities_sorted();
-        let printable = expanded.iter().map(PrintableActivityItem::Activity);
-        print_activities(printable, machine_readable);
-    } else {
-        let mut branches = Vec::from_iter(hierarchy.branches.keys());
-        let mut leafs = Vec::from_iter(hierarchy.leafs.values());
-        leafs.sort_unstable_by(|a, b| a.name().cmp(b.name()));
-        branches.sort_unstable();
-        let printable = branches
-            .iter()
-            .map(|s| PrintableActivityItem::CategoryName(s))
-            .chain(leafs.iter().map(|s| PrintableActivityItem::ActivityLeaf(s)));
-        print_activities(printable, machine_readable);
-    };
+enum HierarchyListMode {
+    Flat,
+    Collapsed,
+    Recursive,
+}
+
+fn print_hierarchy(
+    hierarchy: &ActivityCategory,
+    list_mode: HierarchyListMode,
+    machine_readable: bool,
+) {
+    match list_mode {
+        HierarchyListMode::Recursive => {
+            let expanded = hierarchy.to_activities_sorted();
+            let printable = expanded.iter().map(PrintableActivityItem::Activity);
+            print_activities(printable, machine_readable);
+        }
+        HierarchyListMode::Collapsed => {
+            todo!()
+        }
+        HierarchyListMode::Flat => {
+            let mut branches = Vec::from_iter(hierarchy.branches.keys());
+            let mut leafs = Vec::from_iter(hierarchy.leafs.values());
+            leafs.sort_unstable_by(|a, b| a.name().cmp(b.name()));
+            branches.sort_unstable();
+            let printable = branches
+                .iter()
+                .map(|s| PrintableActivityItem::CategoryName(s))
+                .chain(leafs.iter().map(|s| PrintableActivityItem::ActivityLeaf(s)));
+            print_activities(printable, machine_readable);
+        }
+    }
 }
 fn print_activities<'a, I>(activities: I, print_machine_readable: bool)
 where

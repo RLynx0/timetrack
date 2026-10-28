@@ -210,6 +210,12 @@ pub struct ListActivities {
     /// Show contents of activity categories
     #[clap(short, long)]
     pub recursive: bool,
+    
+    /// Collapse activity categories with only one entry
+    /// 
+    /// Does nothing when --recursive is passed.
+    #[clap(short, long)]
+    pub collapsed: bool,
 
     /// Print machine readable values instead of a formatted table
     #[clap(short, long)]
