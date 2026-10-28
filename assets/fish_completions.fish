@@ -59,6 +59,14 @@ function __timetrack_attendance_types
     timetrack list-attendance-types -m \
         | awk -F "\t" '{ print $1 "\t\'" $2 "\'" }'
 end
+function __timetrack_collapsed_activities
+    set parent (commandline -ct | string replace -r '[^/]+$' '')
+    timetrack activity ls -cm $parent | awk -v p="$parent" -F "\t" '
+        { printf "%s", p }
+        $2 { printf "%s\t\'%s\'\n", $1, $2; next }
+        { print $1 }
+    '
+end
 function __timetrack_activities
     set parent (commandline -ct | string replace -r '[^/]+$' '')
     timetrack activity ls -m $parent | awk -v p="$parent" -F "\t" '
@@ -76,7 +84,7 @@ complete -c timetrack -f \
 # Subcommand start
 complete -c timetrack -f \
     -n '__fish_seen_subcommand_from start' \
-    -a "(__timetrack_activities)"
+    -a "(__timetrack_collapsed_activities)"
 complete -c timetrack \
     -xl attendance -s a \
     -n '__fish_seen_subcommand_from start' \

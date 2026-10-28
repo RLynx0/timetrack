@@ -7,6 +7,9 @@ use crate::{
     trackable::{Activity, ActivityCategory, ActivityItemRef, ActivityLeaf, PrintableActivityItem},
 };
 
+#[cfg(test)]
+mod tests;
+
 pub fn set_activity(set_opts: &cli::SetActivity) -> Result<()> {
     let activities = get_all_trackable_activities()?;
     let hierarchy = ActivityCategory::from(activities);
@@ -86,7 +89,19 @@ fn print_hierarchy(
             print_activities(printable, machine_readable);
         }
         HierarchyListMode::Collapsed => {
-            todo!()
+            let mut branches: Vec<_> = hierarchy.branches.iter().collect();
+            let mut leafs: Vec<_> = hierarchy.leafs.values().collect();
+            branches.sort_unstable_by(|(a, _), (b, _)| a.cmp(b));
+            leafs.sort_unstable_by(|a, b| a.name().cmp(b.name()));
+            let printable = branches
+                .iter()
+                .map(|(name, category)| collapsed_category_item(name, category))
+                .chain(
+                    leafs
+                        .iter()
+                        .map(|leaf| PrintableActivityItem::ActivityLeaf(leaf)),
+                );
+            print_activities(printable, machine_readable);
         }
         HierarchyListMode::Flat => {
             let mut branches = Vec::from_iter(hierarchy.branches.keys());
@@ -101,6 +116,29 @@ fn print_hierarchy(
         }
     }
 }
+
+fn collapsed_category_item<'a>(
+    name: &str,
+    category: &'a ActivityCategory,
+) -> PrintableActivityItem<'a> {
+    let mut path = String::from(name);
+    let mut category = category;
+    while category.leafs.is_empty() && category.branches.len() == 1 {
+        let (name, child) = category.branches.iter().next().unwrap();
+        path.push('/');
+        path.push_str(name);
+        category = child;
+    }
+    path.push('/');
+    if category.branches.is_empty() && category.leafs.len() == 1 {
+        let leaf = category.leafs.values().next().unwrap();
+        path.push_str(leaf.name());
+        PrintableActivityItem::ActivityPath(path.into(), leaf)
+    } else {
+        PrintableActivityItem::CategoryPath(path.into())
+    }
+}
+
 fn print_activities<'a, I>(activities: I, print_machine_readable: bool)
 where
     I: IntoIterator<Item = PrintableActivityItem<'a>>,

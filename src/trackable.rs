@@ -240,6 +240,8 @@ impl Display for ActivityLeaf {
 
 pub enum PrintableActivityItem<'a> {
     CategoryName(&'a str),
+    CategoryPath(Rc<str>),
+    ActivityPath(Rc<str>, &'a ActivityLeaf),
     ActivityLeaf(&'a ActivityLeaf),
     Activity(&'a Activity),
 }
@@ -247,21 +249,25 @@ impl PrintableActivityItem<'_> {
     pub fn display_name(&self) -> Rc<str> {
         match self {
             PrintableActivityItem::CategoryName(name) => format!("{name}/").into(),
+            PrintableActivityItem::CategoryPath(path) => Rc::clone(path),
+            PrintableActivityItem::ActivityPath(path, _) => Rc::clone(path),
             PrintableActivityItem::ActivityLeaf(leaf) => leaf.name.clone(),
             PrintableActivityItem::Activity(activity) => Rc::from(activity.full_path()),
         }
     }
     pub fn wbs(&self) -> Option<&str> {
         match self {
-            PrintableActivityItem::CategoryName(_) => None,
-            PrintableActivityItem::ActivityLeaf(leaf) => Some(leaf.wbs()),
+            PrintableActivityItem::CategoryName(_) | PrintableActivityItem::CategoryPath(_) => None,
+            PrintableActivityItem::ActivityLeaf(leaf)
+            | PrintableActivityItem::ActivityPath(_, leaf) => Some(leaf.wbs()),
             PrintableActivityItem::Activity(activity) => Some(activity.wbs()),
         }
     }
     pub fn description(&self) -> Option<&str> {
         match self {
-            PrintableActivityItem::CategoryName(_) => None,
-            PrintableActivityItem::ActivityLeaf(leaf) => leaf.description(),
+            PrintableActivityItem::CategoryName(_) | PrintableActivityItem::CategoryPath(_) => None,
+            PrintableActivityItem::ActivityLeaf(leaf)
+            | PrintableActivityItem::ActivityPath(_, leaf) => leaf.description(),
             PrintableActivityItem::Activity(activity) => activity.description(),
         }
     }
@@ -270,6 +276,15 @@ impl Display for PrintableActivityItem<'_> {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             PrintableActivityItem::CategoryName(name) => write!(f, "{name}/\t\t"),
+            PrintableActivityItem::CategoryPath(path) => write!(f, "{path}\t\t"),
+            PrintableActivityItem::ActivityPath(path, leaf) => {
+                write!(
+                    f,
+                    "{path}\t{}\t{}",
+                    leaf.wbs(),
+                    leaf.description().unwrap_or_default()
+                )
+            }
             PrintableActivityItem::ActivityLeaf(leaf) => write!(f, "{leaf}"),
             PrintableActivityItem::Activity(activity) => write!(f, "{activity}"),
         }
