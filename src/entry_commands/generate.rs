@@ -5,20 +5,22 @@ use color_eyre::eyre::{Result, format_err};
 
 use crate::{
     activity_entry::activity_groupings::{CollapsedActivity, collapse_activities},
-    activity_range::InLast,
     cli,
     config::Config,
     get_config,
-    time_window::{Direction, TimePoint},
+    time_window::{Direction, Relative, TimePoint, Unit},
 };
 
 use super::get_activities_since;
 
 pub fn handle_generate(generate_opts: &cli::Generate) -> Result<()> {
     let now = Local::now();
-    let start_time = TimePoint::Relative(InLast::Months(0))
-        .bounds(now, Direction::Backward)?
-        .0;
+    let start_time = TimePoint::Relative(Relative {
+        count: 0,
+        unit: Unit::Month,
+    })
+    .bounds(now, Direction::Backward)?
+    .0;
     let activities = get_activities_since(&start_time)?;
     let collapsed = collapse_activities(&activities, now);
 

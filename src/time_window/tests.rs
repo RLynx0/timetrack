@@ -72,6 +72,23 @@ fn resolves_relative_and_absolute_ranges_with_bucket_endpoints() {
         ("month", Some("2026-01-01 00:00:00"), "2026-01-15 13:45:00"),
         ("3d", Some("2026-01-12 00:00:00"), "2026-01-15 13:45:00"),
         ("3h", Some("2026-01-15 10:00:00"), "2026-01-15 13:45:00"),
+        ("week", Some("2026-01-12 00:00:00"), "2026-01-15 13:45:00"),
+        ("1w..1w", Some("2026-01-05 00:00:00"), "2026-01-12 00:00:00"),
+        (
+            "2024-02",
+            Some("2024-02-01 00:00:00"),
+            "2024-03-01 00:00:00",
+        ),
+        (
+            "2024-02-29..0d",
+            Some("2024-02-29 00:00:00"),
+            "2024-03-01 00:00:00",
+        ),
+        (
+            "2024-12..1m",
+            Some("2024-12-01 00:00:00"),
+            "2025-02-01 00:00:00",
+        ),
         (
             "2025-12",
             Some("2025-12-01 00:00:00"),
@@ -115,4 +132,16 @@ fn caps_future_endpoints_and_rejects_empty_or_inverted_ranges() {
     assert!(window("2099-01").resolve(now).is_err());
     assert!(window("2025-03..2025-01").resolve(now).is_err());
     assert!(window("2026-02..3d").resolve(now).is_err());
+    for unit in ["h", "d", "w", "m"] {
+        assert!(
+            window(&format!("{}{}", i64::MAX, unit))
+                .resolve(now)
+                .is_err()
+        );
+        assert!(
+            window(&format!("2025-01..{}{}", i64::MAX, unit))
+                .resolve(now)
+                .is_err()
+        );
+    }
 }

@@ -170,31 +170,17 @@ fn get_last_entry() -> Result<Option<ActivityEntry>> {
     Ok(None)
 }
 
-fn get_last_activity() -> Result<Option<TrackedActivity>> {
-    let path = files::get_entry_file_path()?;
-    if !fs::exists(&path)? {
-        return Ok(None);
-    }
-    let mut end = None;
-    for line in RawRevLines::new(fs::File::open(path)?) {
-        if let Some(entry) = entry_from_byte_result(line)? {
-            let timestamp = *entry.time_stamp();
-            if let ActivityEntry::Start(start) = entry {
-                return Ok(Some(TrackedActivity::new(start, end)));
-            }
-            end = Some(timestamp);
-        }
-    }
-    Ok(None)
-}
-
 fn get_last_activities_until<T>(
     mut select: impl FnMut(&[TrackedActivity], bool) -> Option<T>,
 ) -> Result<T> {
     let mut count = 32;
     loop {
         let activities = get_last_n_activities(count)?;
-        let exhausted = activities.len() < count;
+        let exhausted = activities
+            .iter()
+            .filter(|activity| activity.end_time().is_some())
+            .count()
+            < count;
         if let Some(selected) = select(&activities, exhausted) {
             return Ok(selected);
         }
@@ -242,74 +228,46 @@ fn get_activities_between(
     Ok(activities)
 }
 
-/// Get the last `count` activities in chronological order
-/// Activities crossing over midnight will be automatically split
+/// Get the last `count` completed pieces plus the ongoing piece, in chronological order.
+/// Activities crossing midnight are split, except that zero selects the whole ongoing activity.
 fn get_last_n_activities(count: usize) -> Result<Vec<TrackedActivity>> {
     let path = &files::get_entry_file_path()?;
     if !fs::exists(path)? {
         return Ok(Vec::new());
     }
     let file = fs::File::open(path)?;
-    let mut rev_lines = RawRevLines::new(file);
-    let mut activities = Vec::new();
-    let mut last_timestamp = None;
-    while let Some(line) = rev_lines.next()
-        && activities.len() < count
-    {
-        let Some(entry) = entry_from_byte_result(line)? else {
-            continue;
-        };
-        let end_timestamp = last_timestamp.take();
-        last_timestamp = Some(*entry.time_stamp());
-        if let ActivityEntry::Start(start_entry) = entry {
-            activities.extend(
-                TrackedActivity::new(start_entry, end_timestamp)
-                    .split_on_midnight(Local::now())
-                    .collect::<Vec<_>>()
-                    .into_iter()
-                    .rev()
-                    .take(count - activities.len()),
-            );
-        }
-    }
-
-    Ok(activities.into_iter().rev().collect())
-}
-
-/// Get the last `count` completed activity pieces plus the currently ongoing piece.
-fn get_last_n_completed_activities_plus_ongoing(count: usize) -> Result<Vec<TrackedActivity>> {
-    let path = &files::get_entry_file_path()?;
-    if !fs::exists(path)? {
-        return Ok(Vec::new());
-    }
-    let file = fs::File::open(path)?;
-    let mut rev_lines = RawRevLines::new(file);
+    let rev_lines = RawRevLines::new(file);
+    let now = Local::now();
     let mut activities = Vec::new();
     let mut completed_count = 0;
     let mut last_timestamp = None;
-    while completed_count < count
-        && let Some(line) = rev_lines.next()
-    {
+    'entries: for line in rev_lines {
         let Some(entry) = entry_from_byte_result(line)? else {
             continue;
         };
         let end_timestamp = last_timestamp.take();
         last_timestamp = Some(*entry.time_stamp());
         if let ActivityEntry::Start(start) = entry {
-            for activity in TrackedActivity::new(start, end_timestamp)
-                .split_on_midnight(Local::now())
+            let activity = TrackedActivity::new(start, end_timestamp);
+            if count == 0 {
+                if activity.end_time().is_none() {
+                    activities.push(activity);
+                }
+                break;
+            }
+            for activity in activity
+                .split_on_midnight(now)
                 .collect::<Vec<_>>()
                 .into_iter()
                 .rev()
             {
-                if activity.end_time().is_none() {
-                    activities.push(activity);
-                } else if completed_count < count {
-                    activities.push(activity);
+                let completed = activity.end_time().is_some();
+                if completed {
                     completed_count += 1;
                 }
-                if completed_count == count {
-                    break;
+                activities.push(activity);
+                if completed && completed_count == count {
+                    break 'entries;
                 }
             }
         }

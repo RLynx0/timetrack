@@ -1,6 +1,7 @@
 use std::{collections::HashMap, fmt::Display, rc::Rc};
 
 use chrono::{DateTime, Local, NaiveDate, TimeDelta};
+use itertools::Itertools;
 
 use crate::activity_entry::TrackedActivity;
 
@@ -155,35 +156,28 @@ pub fn latest_collapsed(
     exhausted: bool,
     now: DateTime<Local>,
 ) -> Option<Vec<CollapsedActivity>> {
-    let mut keys = Vec::new();
     let active_key = activities
         .iter()
         .rev()
         .find(|activity| activity.end_time().is_none())
         .map(ActivityGroupKey::from);
-    if let Some(key) = active_key.as_ref() {
-        keys.push(*key);
-    }
-    let mut completed_keys = 0;
-    for activity in activities.iter().rev() {
-        if activity.end_time().is_none() {
-            continue;
-        }
-        let key = ActivityGroupKey::from(activity);
-        if active_key.as_ref().is_some_and(|active| *active == key) || keys.contains(&key) {
-            continue;
-        }
-        if completed_keys < count {
-            keys.push(key);
-            completed_keys += 1;
-        }
-    }
+    let completed_keys: Vec<_> = activities
+        .iter()
+        .rev()
+        .filter(|activity| activity.end_time().is_some())
+        .map(ActivityGroupKey::from)
+        .filter(|key| Some(*key) != active_key)
+        .unique()
+        .take(count)
+        .collect();
+    let completed_count = completed_keys.len();
+    let keys: Vec<_> = active_key.into_iter().chain(completed_keys).collect();
     if !exhausted {
         let oldest_date = keys.iter().map(|key| key.date).min();
         let first_date = activities
             .first()
             .map(|activity| activity.start_time().date_naive());
-        if completed_keys < count
+        if completed_count < count
             || oldest_date.is_some_and(|oldest_date| first_date.is_some_and(|d| d >= oldest_date))
         {
             return None;

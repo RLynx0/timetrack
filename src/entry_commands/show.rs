@@ -1,6 +1,6 @@
 use std::rc::Rc;
 
-use chrono::{DurationRound, Local, TimeDelta};
+use chrono::{DateTime, DurationRound, Local, TimeDelta};
 use color_eyre::eyre::Result;
 use itertools::Itertools;
 use owo_colors::{OwoColorize, Stream};
@@ -19,18 +19,22 @@ use crate::{
 };
 
 use super::{
-    get_activities_between, get_last_activities_until, get_last_activity, get_last_entry,
-    get_last_n_completed_activities_plus_ongoing,
+    get_activities_between, get_last_activities_until, get_last_entry, get_last_n_activities,
 };
+
+enum Selection {
+    Window(Vec<TrackedActivity>),
+    Latest(usize),
+}
 
 pub fn show_activities(show_opts: &cli::Show) -> Result<()> {
     let now = Local::now();
-    let window_activities = match &show_opts.range {
+    let selection = match &show_opts.range {
         ActivityRange::Window(window) => {
             let (start, end) = window.resolve(now)?;
-            Some(get_activities_between(start, end, now)?)
+            Selection::Window(get_activities_between(start, end, now)?)
         }
-        ActivityRange::Count(_) => None,
+        ActivityRange::Count(count) => Selection::Latest(*count),
     };
 
     for (i, mode) in show_opts.mode.iter().unique().enumerate() {
@@ -48,76 +52,75 @@ pub fn show_activities(show_opts: &cli::Show) -> Result<()> {
                 }
             );
         }
-        if let Some(activities) = &window_activities {
+        match &selection {
+            Selection::Window(activities) => show_window(activities, mode, show_opts, now)?,
+            Selection::Latest(count) => show_latest(*count, mode, show_opts, now)?,
+        }
+    }
+    Ok(())
+}
+
+fn show_window(
+    activities: &[TrackedActivity],
+    mode: &cli::ShowMode,
+    show_opts: &cli::Show,
+    now: DateTime<Local>,
+) -> Result<()> {
+    if activities.is_empty() {
+        return show_empty();
+    }
+    match mode {
+        cli::ShowMode::Entries => {
+            show_individual_activities(activities, show_opts.machine_readable)?
+        }
+        cli::ShowMode::Collapsed => print_collapsed(
+            &collapse_activities(activities, now),
+            show_opts.machine_readable,
+            false,
+        )?,
+        cli::ShowMode::Attendance => print_attendance(
+            &get_attendance_ranges(activities),
+            show_opts.machine_readable,
+            false,
+        )?,
+        cli::ShowMode::Time => show_activity_time(activities, show_opts.machine_readable),
+    }
+    Ok(())
+}
+
+fn show_latest(
+    count: usize,
+    mode: &cli::ShowMode,
+    show_opts: &cli::Show,
+    now: DateTime<Local>,
+) -> Result<()> {
+    let latest = count == 0;
+    if latest && *mode != cli::ShowMode::Entries && show_inactive(show_opts)? {
+        return Ok(());
+    }
+    match mode {
+        cli::ShowMode::Entries if latest => show_current_entry(show_opts)?,
+        cli::ShowMode::Entries | cli::ShowMode::Time => {
+            let activities = get_last_n_activities(count)?;
             if activities.is_empty() {
                 show_empty()?;
-                continue;
+            } else if *mode == cli::ShowMode::Time {
+                show_activity_time(&activities, show_opts.machine_readable);
+            } else {
+                show_individual_activities(&activities, show_opts.machine_readable)?;
             }
-            match mode {
-                cli::ShowMode::Entries => {
-                    show_individual_activities(activities, show_opts.machine_readable)?
-                }
-                cli::ShowMode::Collapsed => {
-                    show_collapsed_activities(activities, show_opts.machine_readable)?
-                }
-                cli::ShowMode::Attendance => {
-                    show_daily_attendance(activities, show_opts.machine_readable)?
-                }
-                cli::ShowMode::Time => show_activity_time(activities, show_opts.machine_readable),
-            }
-            continue;
         }
-        let ActivityRange::Count(count) = &show_opts.range else {
-            unreachable!()
-        };
-        let latest = *count == 0;
-        if latest && *mode != cli::ShowMode::Entries && show_inactive(show_opts)? {
-            continue;
+        cli::ShowMode::Collapsed => {
+            let rows = get_last_activities_until(|activities, exhausted| {
+                latest_collapsed(activities, count, exhausted, now)
+            })?;
+            print_collapsed(&rows, show_opts.machine_readable, latest)?;
         }
-        match mode {
-            cli::ShowMode::Entries if latest => show_current_entry(show_opts)?,
-            cli::ShowMode::Entries | cli::ShowMode::Time => {
-                let activities = if latest {
-                    get_last_activity()?.into_iter().collect()
-                } else {
-                    get_last_n_completed_activities_plus_ongoing(*count)?
-                };
-                if activities.is_empty() {
-                    show_empty()?;
-                } else if *mode == cli::ShowMode::Time {
-                    show_activity_time(&activities, show_opts.machine_readable);
-                } else {
-                    show_individual_activities(&activities, show_opts.machine_readable)?;
-                }
-            }
-            cli::ShowMode::Collapsed => {
-                let rows = get_last_activities_until(|activities, exhausted| {
-                    latest_collapsed(activities, *count, exhausted, now)
-                })?;
-                if rows.is_empty() {
-                    show_empty()?;
-                } else if show_opts.machine_readable {
-                    for row in rows {
-                        println!("{row}");
-                    }
-                } else {
-                    print_collapsed_activity_table(&rows, latest)?;
-                }
-            }
-            cli::ShowMode::Attendance => {
-                let rows = get_last_activities_until(|activities, exhausted| {
-                    latest_attendance_ranges(activities, *count, exhausted)
-                })?;
-                if rows.is_empty() {
-                    show_empty()?;
-                } else if show_opts.machine_readable {
-                    for row in rows {
-                        println!("{row}");
-                    }
-                } else {
-                    print_attendance_table(&rows, latest)?;
-                }
-            }
+        cli::ShowMode::Attendance => {
+            let rows = get_last_activities_until(|activities, exhausted| {
+                latest_attendance_ranges(activities, count, exhausted)
+            })?;
+            print_attendance(&rows, show_opts.machine_readable, latest)?;
         }
     }
     Ok(())
@@ -257,14 +260,19 @@ fn print_activitiy_table(activities: &[TrackedActivity]) -> Result<()> {
 // Collapsed //
 // --------- //
 
-fn show_collapsed_activities(activities: &[TrackedActivity], machine_readable: bool) -> Result<()> {
-    let collapsed_activities = collapse_activities(activities, Local::now());
-    if machine_readable {
+fn print_collapsed(
+    collapsed_activities: &[CollapsedActivity],
+    machine_readable: bool,
+    single: bool,
+) -> Result<()> {
+    if collapsed_activities.is_empty() {
+        show_empty()?;
+    } else if machine_readable {
         for collapsed in collapsed_activities {
             println!("{collapsed}");
         }
     } else {
-        print_collapsed_activity_table(&collapsed_activities, false)?
+        print_collapsed_activity_table(collapsed_activities, single)?
     }
 
     Ok(())
@@ -327,14 +335,19 @@ fn print_collapsed_activity_table(
 // Attendance //
 // ---------- //
 
-fn show_daily_attendance(activities: &[TrackedActivity], machine_readable: bool) -> Result<()> {
-    let ranges = get_attendance_ranges(activities);
-    if machine_readable {
+fn print_attendance(
+    ranges: &[AttendanceRange],
+    machine_readable: bool,
+    single: bool,
+) -> Result<()> {
+    if ranges.is_empty() {
+        show_empty()?;
+    } else if machine_readable {
         for range in ranges {
             println!("{range}");
         }
     } else {
-        print_attendance_table(&ranges, false)?;
+        print_attendance_table(ranges, single)?;
     }
 
     Ok(())

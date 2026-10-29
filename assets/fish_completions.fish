@@ -38,27 +38,15 @@ function __timetrack_range_suggestions
     set -l token (commandline -ct)
     if string match -q '*..*' -- $token
         set -l left (string replace -r '\.\..*$' '' -- $token)
-        if string match -qr '^[0-9]{4}(-[0-9]{2}(-[0-9]{2})?)?$' -- $left
-            echo "$left.."
-            echo "$left..1day"
-            echo "$left..3days"
-            echo "$left..1month"
-        else if test -z "$left"
-            echo '..'
-            echo '..1day'
-            echo '..3days'
-            echo '..1week'
-            echo '..1month'
+        echo "$left.."
+        for suffix in 1day 3days 1week 1month
+            echo "$left..$suffix"
+        end
+        if test -z "$left"
             set -l year (date +%Y)
             echo "..$year"
             date +'%Y-%m' | string prepend '..'
             date +'%Y-%m-%d' | string prepend '..'
-        else
-            echo "$left.."
-            echo "$left..1day"
-            echo "$left..3days"
-            echo "$left..1week"
-            echo "$left..1month"
         end
         return
     end

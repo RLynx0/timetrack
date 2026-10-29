@@ -295,6 +295,22 @@ fn relative_month_windows_and_unsplit_latest_time() {
 }
 
 #[test]
+fn current_time_includes_the_whole_overnight_activity() {
+    let now = Utc::now();
+    let fixture = Fixture::new(&start(now - TimeDelta::hours(49), "overnight", "ON"));
+    let seconds = fixture
+        .show(&["time", "-r", "0", "-m"])
+        .trim()
+        .parse::<f64>()
+        .unwrap();
+    assert!((176_400.0..176_410.0).contains(&seconds), "{seconds}");
+    assert_eq!(
+        fixture.show(&["entries", "-r", "1", "-m"]).lines().count(),
+        2
+    );
+}
+
+#[test]
 fn cli_rejects_old_flags_and_invalid_ranges_and_handles_empty_data() {
     let fixture = Fixture::new("");
     for args in [
