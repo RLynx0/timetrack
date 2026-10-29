@@ -603,6 +603,7 @@ dependencies = [
  "owo-colors",
  "rev_lines",
  "serde",
+ "strsim",
  "toml",
 ]
 
