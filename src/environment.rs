@@ -23,6 +23,14 @@ pub struct Environment {
     #[arg(long, global = true, env = "MAX_TABLE_WIDTH", verbatim_doc_comment)]
     pub max_table_width: Option<usize>,
 
+    /// Center tables in the provided width
+    ///
+    /// Uses max_table_width or the terminal width for positioning.
+    /// If false, tables align at the left side of the output.
+    /// Applies to redirected tables too when max_table_width is set.
+    #[arg(long, global = true, env = "CENTER_TABLES", verbatim_doc_comment)]
+    pub center_tables: bool,
+
     /// Force colored output, taking precedence over --no-color
     #[arg(long, global = true, env = "FORCE_COLOR", value_parser = parse_force_color)]
     pub force_color: bool,
@@ -74,6 +82,7 @@ impl Environment {
                 .max_table_width
                 .map(TableWidth::Fixed)
                 .unwrap_or_default(),
+            center: self.center_tables,
         }
     }
 

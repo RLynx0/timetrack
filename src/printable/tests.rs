@@ -91,6 +91,7 @@ fn headers_rows_and_borders_use_the_same_fitted_width() {
         table.with_options(TablePrintOptions {
             chars,
             width: TableWidth::Fixed(19),
+            ..Default::default()
         });
         let fitted = render(&table);
         assert!(fitted.contains("Long..."));

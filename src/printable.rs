@@ -36,6 +36,7 @@ macro_rules! print_smart_table {
 pub struct TablePrintOptions {
     pub chars: TableCharOptions,
     pub width: TableWidth,
+    pub center: bool,
 }
 
 #[derive(Clone, Debug, Default)]
@@ -237,11 +238,16 @@ where
 {
     pub fn print(&self) {
         let max_width = self.options.width.resolve();
-        self.render(&mut io::stdout().lock(), max_width)
+        self.render(&mut io::stdout().lock(), max_width, self.options.center)
             .expect("failed to print table");
     }
 
-    fn render(&self, output: &mut impl Write, max_width: Option<usize>) -> io::Result<()> {
+    fn render(
+        &self,
+        output: &mut impl Write,
+        max_width: Option<usize>,
+        center: bool,
+    ) -> io::Result<()> {
         let copt = &self.options.chars;
         let keys: Vec<_> = self.keys.iter().map(ToString::to_string).collect();
         let columns: Vec<Vec<_>> = self
@@ -259,16 +265,21 @@ where
                 .unwrap_or_default();
             widths.push(width);
         }
+        let mut left_pad = String::new();
         if let Some(limit) = max_width {
             widths = fit_widths(&widths, limit);
+            if center {
+                let full_width = widths.iter().map(|col_w| col_w + 3).sum::<usize>() + 1;
+                left_pad = " ".repeat((limit - full_width) / 2);
+            }
         }
 
         if let Some(co) = &copt.caps {
-            write_rule(output, &widths, copt.h, co.dr, co.hd, co.dl)?;
+            write_rule(output, &widths, &left_pad, copt.h, co.dr, co.hd, co.dl)?;
         }
 
         // Print table headers
-        write!(output, "{}", copt.v)?;
+        write!(output, "{}{}", left_pad, copt.v)?;
         for (k, w) in keys.iter().zip(&widths) {
             let (k, space) = fit_cell(k, *w);
             write!(
@@ -281,12 +292,15 @@ where
         }
         writeln!(output)?;
 
-        write_rule(output, &widths, copt.h, copt.vr, copt.hv, copt.vl)?;
+        write_rule(
+            output, &widths, &left_pad, copt.h, copt.vr, copt.hv, copt.vl,
+        )?;
 
         // Print table rows
         let complete_rows = columns.iter().map(|vs| vs.len()).max().unwrap_or_default();
         let rows = (0..complete_rows).map(|r| columns.iter().map(move |column| &column[r]));
         for row in rows {
+            write!(output, "{left_pad}")?;
             for (v, width) in row.zip(&widths) {
                 let (v, space) = fit_cell(v, *width);
                 write!(output, "{} {v}{space} ", copt.v)?;
@@ -295,7 +309,7 @@ where
         }
 
         if let Some(co) = &copt.caps {
-            write_rule(output, &widths, copt.h, co.ur, co.hu, co.ul)?;
+            write_rule(output, &widths, &left_pad, copt.h, co.ur, co.hu, co.ul)?;
         }
         Ok(())
     }
@@ -304,11 +318,13 @@ where
 fn write_rule(
     output: &mut impl Write,
     widths: &[usize],
+    left_pad: &str,
     horizontal: char,
     left: char,
     middle: char,
     right: char,
 ) -> io::Result<()> {
+    write!(output, "{left_pad}")?;
     for (index, width) in widths.iter().enumerate() {
         let junction = if index == 0 { left } else { middle };
         write!(
