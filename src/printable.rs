@@ -1,6 +1,15 @@
-use std::{fmt::Display, rc::Rc};
+use std::{
+    borrow::Cow,
+    fmt::Display,
+    io::{self, IsTerminal, Write},
+    rc::Rc,
+};
 
 use owo_colors::{OwoColorize, Stream};
+use unicode_width::UnicodeWidthStr;
+
+#[cfg(test)]
+mod tests;
 
 #[macro_export]
 macro_rules! print_smart_list {
@@ -19,6 +28,7 @@ macro_rules! print_smart_table {
             $(($k, $vs)),*
         ]).with_options($crate::printable::TablePrintOptions {
             chars: $crate::printable::TableCharOptions::rounded(),
+            ..Default::default()
         }).print();
     };
 }
@@ -26,6 +36,94 @@ macro_rules! print_smart_table {
 #[derive(Clone, Debug, Default)]
 pub struct TablePrintOptions {
     pub chars: TableCharOptions,
+    pub width: TableWidth,
+}
+
+#[derive(Clone, Debug, Default)]
+#[allow(dead_code)]
+pub enum TableWidth {
+    #[default]
+    Auto,
+    Unbounded,
+    Fixed(usize),
+}
+
+impl TableWidth {
+    fn resolve(&self) -> Option<usize> {
+        match self {
+            Self::Auto => {
+                let stdout = io::stdout();
+                if !stdout.is_terminal() {
+                    return None;
+                }
+                terminal_size::terminal_size_of(stdout)
+                    .map(|(terminal_size::Width(width), _)| usize::from(width))
+                    .filter(|&width| width > 0)
+            }
+            Self::Unbounded => None,
+            Self::Fixed(width) => Some(*width),
+        }
+    }
+}
+
+fn display_width(text: &str) -> usize {
+    UnicodeWidthStr::width(text)
+}
+
+fn truncate_to_width(text: &str, width: usize) -> Cow<'_, str> {
+    if display_width(text) <= width {
+        return Cow::Borrowed(text);
+    }
+    let budget = width.saturating_sub(3);
+    let mut end = 0;
+    for (index, ch) in text.char_indices() {
+        let next = index + ch.len_utf8();
+        if display_width(&text[..next]) > budget {
+            break;
+        }
+        end = next;
+    }
+    Cow::Owned(format!("{}{}", &text[..end], ".".repeat(width.min(3))))
+}
+
+fn fit_cell(text: &str, width: usize) -> (Cow<'_, str>, String) {
+    let text = truncate_to_width(text, width);
+    let padding = " ".repeat(width - display_width(&text));
+    (text, padding)
+}
+
+fn fit_widths(natural: &[usize], terminal_width: usize) -> Option<Vec<usize>> {
+    const MIN_COL_WIDTH: usize = 4;
+
+    let budget = terminal_width.checked_sub(3 * natural.len() + 1)?;
+    let total: usize = natural.iter().sum();
+    if total <= budget {
+        return Some(natural.to_vec());
+    }
+    if natural.iter().map(|&w| w.min(MIN_COL_WIDTH)).sum::<usize>() > budget {
+        return None;
+    }
+
+    // Find a shared ceiling, shrinking the widest columns first.
+    let mut low = MIN_COL_WIDTH;
+    let mut high = natural.iter().copied().max().unwrap_or(MIN_COL_WIDTH);
+    while low < high {
+        let mid = low + (high - low).div_ceil(2);
+        if natural.iter().map(|&w| w.min(mid)).sum::<usize>() <= budget {
+            low = mid;
+        } else {
+            high = mid - 1;
+        }
+    }
+    let mut widths: Vec<_> = natural.iter().map(|&w| w.min(low)).collect();
+    let mut remainder = budget - widths.iter().sum::<usize>();
+    for (width, &original) in widths.iter_mut().zip(natural) {
+        if remainder > 0 && *width < original {
+            *width += 1;
+            remainder -= 1;
+        }
+    }
+    Some(widths)
 }
 #[derive(Clone, Debug)]
 pub struct TableCharOptions {
@@ -135,16 +233,31 @@ where
     V: Display,
 {
     pub fn print(&self) {
+        let max_width = self.options.width.resolve();
+        self.render(&mut io::stdout().lock(), max_width)
+            .expect("failed to print table");
+    }
+
+    fn render(&self, output: &mut impl Write, max_width: Option<usize>) -> io::Result<()> {
         let copt = &self.options.chars;
+        let keys: Vec<_> = self.keys.iter().map(ToString::to_string).collect();
+        let columns: Vec<Vec<_>> = self
+            .columns
+            .iter()
+            .map(|column| column.iter().map(ToString::to_string).collect())
+            .collect();
         let mut widths = Vec::new();
-        for (i, k) in self.keys.iter().enumerate() {
-            let width = self.columns[i]
+        for (i, k) in keys.iter().enumerate() {
+            let width = columns[i]
                 .iter()
-                .map(|s| s.to_string().chars().count())
-                .chain(Some(k.to_string().chars().count()))
+                .map(|s| display_width(s))
+                .chain(Some(display_width(k)))
                 .max()
                 .unwrap_or_default();
             widths.push(width);
+        }
+        if let Some(fitted) = max_width.and_then(|limit| fit_widths(&widths, limit)) {
+            widths = fitted;
         }
 
         // Conditionally print top table cap
@@ -152,47 +265,42 @@ where
             for (i, w) in widths.iter().enumerate() {
                 let v_char = if i == 0 { co.dr } else { co.hd };
                 let h_line = &copt.h.to_string().repeat(*w + 2);
-                print!("{v_char}{h_line}");
+                write!(output, "{v_char}{h_line}")?;
             }
-            println!("{}", co.dl);
+            writeln!(output, "{}", co.dl)?;
         }
 
         // Print table headers
-        print!("{}", copt.v);
-        for (k, w) in self.keys.iter().zip(&widths) {
-            let k = k.to_string();
-            let space = " ".repeat(w - k.chars().count());
-            print!(
+        write!(output, "{}", copt.v)?;
+        for (k, w) in keys.iter().zip(&widths) {
+            let (k, space) = fit_cell(k, *w);
+            write!(
+                output,
                 " {}{} {}",
                 k.if_supports_color(Stream::Stdout, |n| n.blue()),
                 space,
                 copt.v
-            );
+            )?;
         }
-        println!();
+        writeln!(output)?;
 
         // Print header separator
         for (i, w) in widths.iter().enumerate() {
             let v_char = if i == 0 { copt.vr } else { copt.hv };
             let h_line = &copt.h.to_string().repeat(*w + 2);
-            print!("{v_char}{h_line}");
+            write!(output, "{v_char}{h_line}")?;
         }
-        println!("{}", copt.vl);
+        writeln!(output, "{}", copt.vl)?;
 
         // Print table rows
-        let complete_rows = self
-            .columns
-            .iter()
-            .map(|vs| vs.len())
-            .max()
-            .unwrap_or_default();
-        for r in 0..complete_rows {
-            for (i, width) in widths.iter().enumerate() {
-                let v = self.columns[i][r].to_string();
-                let space = " ".repeat(width - v.chars().count());
-                print!("{} {v}{space} ", copt.v);
+        let complete_rows = columns.iter().map(|vs| vs.len()).max().unwrap_or_default();
+        let rows = (0..complete_rows).map(|r| columns.iter().map(move |column| &column[r]));
+        for row in rows {
+            for (v, width) in row.zip(&widths) {
+                let (v, space) = fit_cell(v, *width);
+                write!(output, "{} {v}{space} ", copt.v)?;
             }
-            println!("{}", copt.v);
+            writeln!(output, "{}", copt.v)?;
         }
 
         // Conditionally print bottom table cap
@@ -200,10 +308,11 @@ where
             for (i, w) in widths.iter().enumerate() {
                 let v_char = if i == 0 { co.ur } else { co.hu };
                 let h_line = &copt.h.to_string().repeat(*w + 2);
-                print!("{v_char}{h_line}");
+                write!(output, "{v_char}{h_line}")?;
             }
-            println!("{}", co.ul);
+            writeln!(output, "{}", co.ul)?;
         }
+        Ok(())
     }
 }
 

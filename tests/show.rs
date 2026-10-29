@@ -73,6 +73,16 @@ fn time(input: &str) -> DateTime<Utc> {
 }
 
 #[test]
+fn piped_tables_preserve_long_descriptions() {
+    let description = "A description longer than a typical terminal width ".repeat(5);
+    let mut entries = start(time("2025-01-02T09:00:00Z"), &description, "ON");
+    entries += &end(time("2025-01-02T10:00:00Z"));
+    let output = Fixture::new(&entries).show(&["entries", "-r", "1"]);
+    assert!(output.contains(&description));
+    assert!(!output.contains("..."));
+}
+
+#[test]
 fn latest_and_counts_select_complete_groups_and_ranges() {
     let first = time("2025-01-02T09:00:00Z");
     let mut entries = start(first - TimeDelta::days(1), "old", "ON");
