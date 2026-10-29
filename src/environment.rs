@@ -17,11 +17,10 @@ pub struct Environment {
 
     /// Maximum table width in terminal columns
     ///
-    /// If unset, tables fit the terminal when stdout is a TTY; redirected output
-    /// is unbounded. Applies to redirected tables too when explicitly set.
-    /// Cells may be truncated. If too small to fit minimum columns, the table
-    /// keeps its natural width.
-    #[arg(long, global = true, env = "MAX_TABLE_WIDTH")]
+    /// If unset, tables fit the terminal when stdout is a TTY, unbounded otherwise.
+    /// Applies to redirected tables too when explicitly set.
+    /// Cells may be truncated. Below minimum column widths, the table may exceed the limit.
+    #[arg(long, global = true, env = "MAX_TABLE_WIDTH", verbatim_doc_comment)]
     pub max_table_width: Option<usize>,
 
     /// Force colored output, taking precedence over --no-color

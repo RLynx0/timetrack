@@ -127,7 +127,7 @@ activity. `activity set` is the recommended way to create or update entries.
 | `XDG_DATA_HOME` | None | Base for data files; defaults to `~/.local/share`. |
 | `HOME` | None | Used to construct the default XDG locations if those are unset. |
 | `EDITOR` | `--editor <EDITOR>` / `-e` | Editor used by `edit`; defaults to `vi`. |
-| `MAX_TABLE_WIDTH` | `--max-table-width <MAX_TABLE_WIDTH>` | Unsigned integer maximum table width in terminal columns. If unset, table width follows the terminal when stdout is a TTY; redirected output is unbounded. If too small to fit the minimum column widths, the table keeps its natural width. |
+| `MAX_TABLE_WIDTH` | `--max-table-width <MAX_TABLE_WIDTH>` | Unsigned integer maximum table width in terminal columns. If unset, table width follows the terminal when stdout is a TTY; redirected output is unbounded. If too small to fit the minimum column widths, columns are reduced to at most 4 columns each, so the table may still exceed the limit. |
 | `FORCE_COLOR` | `--force-color` | Forces colored output, taking precedence over `NO_COLOR` / `--no-color`. `0` and `false` do not force color; other values (including empty) do. |
 | `NO_COLOR` | `--no-color` | Disables colors unless forced. Any value except `0` (including empty) disables colors. |
 

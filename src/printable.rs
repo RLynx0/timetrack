@@ -8,6 +8,8 @@ use std::{
 use owo_colors::{OwoColorize, Stream};
 use unicode_width::UnicodeWidthStr;
 
+const MIN_COL_WIDTH: usize = 1;
+
 #[cfg(test)]
 mod tests;
 
@@ -71,7 +73,11 @@ fn truncate_to_width(text: &str, width: usize) -> Cow<'_, str> {
     if display_width(text) <= width {
         return Cow::Borrowed(text);
     }
-    let budget = width.saturating_sub(3);
+    let budget = match width {
+        6.. => width - 3, // abc... | abcd...
+        4.. => width - 2, // ab.. | abc..
+        n => n,           // a | ab | abc
+    };
     let mut end = 0;
     for (index, ch) in text.char_indices() {
         let next = index + ch.len_utf8();
@@ -80,7 +86,8 @@ fn truncate_to_width(text: &str, width: usize) -> Cow<'_, str> {
         }
         end = next;
     }
-    Cow::Owned(format!("{}{}", &text[..end], ".".repeat(width.min(3))))
+    let dots = (width - display_width(&text[..end])).min(3);
+    Cow::Owned(format!("{}{}", &text[..end], ".".repeat(dots)))
 }
 
 fn fit_cell(text: &str, width: usize) -> (Cow<'_, str>, String) {
@@ -89,16 +96,14 @@ fn fit_cell(text: &str, width: usize) -> (Cow<'_, str>, String) {
     (text, padding)
 }
 
-fn fit_widths(natural: &[usize], terminal_width: usize) -> Option<Vec<usize>> {
-    const MIN_COL_WIDTH: usize = 4;
-
-    let budget = terminal_width.checked_sub(3 * natural.len() + 1)?;
+fn fit_widths(natural: &[usize], terminal_width: usize) -> Vec<usize> {
+    let budget = terminal_width.saturating_sub(3 * natural.len() + 1);
     let total: usize = natural.iter().sum();
     if total <= budget {
-        return Some(natural.to_vec());
+        return natural.to_vec();
     }
     if natural.iter().map(|&w| w.min(MIN_COL_WIDTH)).sum::<usize>() > budget {
-        return None;
+        return natural.iter().map(|&w| w.min(MIN_COL_WIDTH)).collect();
     }
 
     // Find a shared ceiling, shrinking the widest columns first.
@@ -120,7 +125,7 @@ fn fit_widths(natural: &[usize], terminal_width: usize) -> Option<Vec<usize>> {
             remainder -= 1;
         }
     }
-    Some(widths)
+    widths
 }
 #[derive(Clone, Debug)]
 pub struct TableCharOptions {
@@ -253,8 +258,8 @@ where
                 .unwrap_or_default();
             widths.push(width);
         }
-        if let Some(fitted) = max_width.and_then(|limit| fit_widths(&widths, limit)) {
-            widths = fitted;
+        if let Some(limit) = max_width {
+            widths = fit_widths(&widths, limit);
         }
 
         // Conditionally print top table cap
