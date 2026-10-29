@@ -9,7 +9,7 @@ use color_eyre::{
     eyre::{Context, Result},
 };
 
-use crate::{cli::Cli, config::Config};
+use crate::{cli::Cli, config::Config, environment::Environment};
 
 mod activity_commands;
 mod activity_entry;
@@ -17,6 +17,7 @@ mod activity_range;
 mod cli;
 mod config;
 mod entry_commands;
+mod environment;
 mod files;
 mod format_string;
 mod printable;
@@ -28,51 +29,55 @@ const NONE_PRINT_VALUE: &str = "--";
 fn main() -> Result<()> {
     color_eyre::install()?;
     let opts = Cli::parse();
+    opts.environment.apply_color();
     handle_ttr_command(&opts)
 }
 
 fn handle_ttr_command(opts: &Cli) -> Result<()> {
+    let env = &opts.environment;
     match &opts.command {
         cli::TtrCommand::Start(opts) => {
-            entry_commands::start_activity(opts).wrap_err("failed to start tracking")
+            entry_commands::start_activity(opts, env).wrap_err("failed to start tracking")
         }
         cli::TtrCommand::End(opts) => {
-            entry_commands::end_activity(opts).wrap_err("failed to end tracking")
+            entry_commands::end_activity(opts, env).wrap_err("failed to end tracking")
         }
         cli::TtrCommand::Show(opts) => {
-            entry_commands::show_activities(opts).wrap_err("failed to show activitiy")
+            entry_commands::show_activities(opts, env).wrap_err("failed to show activitiy")
         }
         cli::TtrCommand::Edit(opts) => {
-            entry_commands::handle_edit(opts).wrap_err("failed to open entry file")
+            entry_commands::handle_edit(opts, env).wrap_err("failed to open entry file")
         }
         cli::TtrCommand::Generate(opts) => {
-            entry_commands::handle_generate(opts).wrap_err("failed to generate output")
+            entry_commands::handle_generate(opts, env).wrap_err("failed to generate output")
         }
-        cli::TtrCommand::Activity(opts) => handle_activity_command(opts),
-        cli::TtrCommand::ListAttendanceTypes(opts) => list_attendance_types(opts),
-        cli::TtrCommand::MakeConfig => make_guided_config(),
+        cli::TtrCommand::Activity(opts) => handle_activity_command(opts, env),
+        cli::TtrCommand::ListAttendanceTypes(opts) => list_attendance_types(opts, env),
+        cli::TtrCommand::MakeConfig => make_guided_config(env),
     }
 }
 
-fn handle_activity_command(activity_command: &cli::ActivityCommand) -> Result<()> {
+fn handle_activity_command(
+    activity_command: &cli::ActivityCommand,
+    env: &Environment,
+) -> Result<()> {
     match activity_command {
-        cli::ActivityCommand::Set(opts) => activity_commands::set_activity(opts)
+        cli::ActivityCommand::Set(opts) => activity_commands::set_activity(opts, env)
             .wrap_err_with(|| format!("failed to set activity '{}'", opts.name)),
-        cli::ActivityCommand::Rm(opts) => activity_commands::remove_activity(opts)
+        cli::ActivityCommand::Rm(opts) => activity_commands::remove_activity(opts, env)
             .wrap_err_with(|| format!("failed to remove activity '{}'", opts.name)),
-        cli::ActivityCommand::Mv(opts) => activity_commands::move_activity(opts)
+        cli::ActivityCommand::Mv(opts) => activity_commands::move_activity(opts, env)
             .wrap_err_with(|| format!("failed to move activity '{}'", opts.from)),
-        cli::ActivityCommand::Ls(opts) => {
-            activity_commands::list_activities(opts).wrap_err_with(|| match &opts.name {
+        cli::ActivityCommand::Ls(opts) => activity_commands::list_activities(opts, env)
+            .wrap_err_with(|| match &opts.name {
                 Some(n) => format!("failed to list activities in {n}"),
                 None => String::from("failed to list activities"),
-            })
-        }
+            }),
     }
 }
 
-fn list_attendance_types(list_opts: &cli::ListAttendanceTypes) -> Result<()> {
-    let config = get_config()?;
+fn list_attendance_types(list_opts: &cli::ListAttendanceTypes, env: &Environment) -> Result<()> {
+    let config = get_config(env)?;
     let mut list = config.attendance_types.into_iter().collect::<Vec<_>>();
     list.sort_by(|(_, va), (_, vb)| va.cmp(vb));
     if list_opts.machine_readable {
@@ -85,8 +90,8 @@ fn list_attendance_types(list_opts: &cli::ListAttendanceTypes) -> Result<()> {
     Ok(())
 }
 
-fn get_config() -> Result<Config> {
-    let config_path = files::get_main_config_path()?;
+fn get_config(env: &Environment) -> Result<Config> {
+    let config_path = files::get_main_config_path(env)?;
     if fs::exists(&config_path)? {
         let config_str = fs::read_to_string(config_path)?;
         Ok(toml::from_str(&config_str)?)
@@ -99,8 +104,8 @@ fn get_config() -> Result<Config> {
     }
 }
 
-fn make_guided_config() -> Result<()> {
-    let config_path = files::get_main_config_path()?;
+fn make_guided_config(env: &Environment) -> Result<()> {
+    let config_path = files::get_main_config_path(env)?;
     let default = toml::from_str::<Config>(include_str!("../assets/default_config.toml"))
         .expect("Default config must be valid");
 

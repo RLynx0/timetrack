@@ -15,7 +15,9 @@ use color_eyre::{
 use owo_colors::Stream;
 
 use crate::{
-    NONE_PRINT_VALUE, cli, files, print_smart_list, print_smart_table,
+    NONE_PRINT_VALUE, cli,
+    environment::Environment,
+    files, print_smart_list, print_smart_table,
     trackable::{
         Activity, ActivityCategory, ActivityItemRef, ActivityLeaf, BUILTIN_ACTIVITY_IDLE_NAME,
         LookupError, PrintableActivityItem,
@@ -25,15 +27,15 @@ use crate::{
 #[cfg(test)]
 mod tests;
 
-pub fn set_activity(set_opts: &cli::SetActivity) -> Result<()> {
+pub fn set_activity(set_opts: &cli::SetActivity, env: &Environment) -> Result<()> {
     let activity = Activity::new(
         &split_path(&set_opts.name),
         &set_opts.wbs,
         set_opts.description.as_deref(),
     )?;
     let name = activity.full_path();
-    let (activities, outcome) = apply_set(get_stored_activities()?, activity, set_opts.force)?;
-    write_stored_activities(&activities)?;
+    let (activities, outcome) = apply_set(get_stored_activities(env)?, activity, set_opts.force)?;
+    write_stored_activities(&activities, env)?;
     let action = match outcome {
         SetOutcome::Added => "Added",
         SetOutcome::Updated => "Updated",
@@ -45,11 +47,11 @@ pub fn set_activity(set_opts: &cli::SetActivity) -> Result<()> {
     Ok(())
 }
 
-pub fn move_activity(move_opts: &cli::MoveActivity) -> Result<()> {
+pub fn move_activity(move_opts: &cli::MoveActivity, env: &Environment) -> Result<()> {
     let from = split_path(&move_opts.from);
     let to = split_path(&move_opts.to);
-    let (activities, destination) = apply_move(get_stored_activities()?, &from, &to)?;
-    write_stored_activities(&activities)?;
+    let (activities, destination) = apply_move(get_stored_activities(env)?, &from, &to)?;
+    write_stored_activities(&activities, env)?;
     println!(
         "Moved '{}' to '{}'",
         from.join("/")
@@ -59,10 +61,11 @@ pub fn move_activity(move_opts: &cli::MoveActivity) -> Result<()> {
     Ok(())
 }
 
-pub fn remove_activity(remove_opts: &cli::RemoveActivity) -> Result<()> {
+pub fn remove_activity(remove_opts: &cli::RemoveActivity, env: &Environment) -> Result<()> {
     let path = split_path(&remove_opts.name);
-    let (activities, count) = apply_remove(get_stored_activities()?, &path, remove_opts.recursive)?;
-    write_stored_activities(&activities)?;
+    let (activities, count) =
+        apply_remove(get_stored_activities(env)?, &path, remove_opts.recursive)?;
+    write_stored_activities(&activities, env)?;
     let noun = if count == 1 { "activity" } else { "activities" };
     println!(
         "Removed {count} {noun} at '{}'",
@@ -191,9 +194,9 @@ fn apply_move(
     Ok((activities, destination.join("/")))
 }
 
-pub fn list_activities(ls_opts: &cli::ListActivities) -> Result<()> {
+pub fn list_activities(ls_opts: &cli::ListActivities, env: &Environment) -> Result<()> {
     let search_path = ls_opts.name.as_deref().map(split_path).unwrap_or_default();
-    let activities = get_all_trackable_activities()?;
+    let activities = get_all_trackable_activities(env)?;
     let hierarchy = ActivityCategory::from(activities);
     let list_mode = match (ls_opts.recursive, ls_opts.collapsed) {
         (true, _) => HierarchyListMode::Recursive,
@@ -202,7 +205,9 @@ pub fn list_activities(ls_opts: &cli::ListActivities) -> Result<()> {
     };
     match hierarchy.get_item_at(&search_path)? {
         ActivityItemRef::Leaf(l) => print_single(l, ls_opts.machine_readable),
-        ActivityItemRef::Category(c) => print_hierarchy(c, list_mode, ls_opts.machine_readable),
+        ActivityItemRef::Category(c) => {
+            print_hierarchy(c, list_mode, ls_opts.machine_readable, env)
+        }
     };
 
     Ok(())
@@ -230,12 +235,13 @@ fn print_hierarchy(
     hierarchy: &ActivityCategory,
     list_mode: HierarchyListMode,
     machine_readable: bool,
+    env: &Environment,
 ) {
     match list_mode {
         HierarchyListMode::Recursive => {
             let expanded = hierarchy.to_activities_sorted();
             let printable = expanded.iter().map(PrintableActivityItem::Activity);
-            print_activities(printable, machine_readable);
+            print_activities(printable, machine_readable, env);
         }
         HierarchyListMode::Collapsed => {
             let mut branches: Vec<_> = hierarchy.branches.iter().collect();
@@ -250,7 +256,7 @@ fn print_hierarchy(
                         .iter()
                         .map(|leaf| PrintableActivityItem::ActivityLeaf(leaf)),
                 );
-            print_activities(printable, machine_readable);
+            print_activities(printable, machine_readable, env);
         }
         HierarchyListMode::Flat => {
             let mut branches = Vec::from_iter(hierarchy.branches.keys());
@@ -261,7 +267,7 @@ fn print_hierarchy(
                 .iter()
                 .map(|s| PrintableActivityItem::CategoryName(s))
                 .chain(leafs.iter().map(|s| PrintableActivityItem::ActivityLeaf(s)));
-            print_activities(printable, machine_readable);
+            print_activities(printable, machine_readable, env);
         }
     }
 }
@@ -288,7 +294,7 @@ fn collapsed_category_item<'a>(
     }
 }
 
-fn print_activities<'a, I>(activities: I, print_machine_readable: bool)
+fn print_activities<'a, I>(activities: I, print_machine_readable: bool, env: &Environment)
 where
     I: IntoIterator<Item = PrintableActivityItem<'a>>,
 {
@@ -297,10 +303,10 @@ where
             println!("{activity}");
         }
     } else {
-        print_activity_table(activities);
+        print_activity_table(activities, env);
     }
 }
-fn print_activity_table<'a, I>(activities: I)
+fn print_activity_table<'a, I>(activities: I, env: &Environment)
 where
     I: IntoIterator<Item = PrintableActivityItem<'a>>,
 {
@@ -324,27 +330,28 @@ where
     }
 
     print_smart_table! {
+        env.table_options();
         "Name" => col_name,
         "WBS" => col_wbs,
         "Default Description" => col_descr,
     };
 }
 
-pub fn get_trackable_activity(activity_path: &str) -> Result<Activity> {
-    get_all_trackable_activities()?
+pub fn get_trackable_activity(activity_path: &str, env: &Environment) -> Result<Activity> {
+    get_all_trackable_activities(env)?
         .into_iter()
         .find(|activity| activity.full_path() == activity_path)
         .ok_or(format_err!("{activity_path} does not exist"))
 }
 
-pub fn get_all_trackable_activities() -> Result<Vec<Activity>> {
-    let mut activities = get_stored_activities()?;
+pub fn get_all_trackable_activities(env: &Environment) -> Result<Vec<Activity>> {
+    let mut activities = get_stored_activities(env)?;
     activities.push(Activity::builtin_idle());
     Ok(activities)
 }
 
-fn get_stored_activities() -> Result<Vec<Activity>> {
-    let path = files::get_activity_file_path()?;
+fn get_stored_activities(env: &Environment) -> Result<Vec<Activity>> {
+    let path = files::get_activity_file_path(env)?;
     if !fs::exists(&path)? {
         return Ok(Vec::new());
     }
@@ -355,8 +362,8 @@ fn get_stored_activities() -> Result<Vec<Activity>> {
     Ok(activities)
 }
 
-fn write_stored_activities(activities: &[Activity]) -> Result<()> {
-    write_activities_to(&files::get_activity_file_path()?, activities)
+fn write_stored_activities(activities: &[Activity], env: &Environment) -> Result<()> {
+    write_activities_to(&files::get_activity_file_path(env)?, activities)
 }
 
 fn write_activities_to(path: &Path, activities: &[Activity]) -> Result<()> {

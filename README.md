@@ -93,6 +93,12 @@ is stored separately in `~/.local/share/timetrack/entries` (or
 precedence over the corresponding XDG locations. Directories are created when
 the program writes to them.
 
+Global CLI flags are accepted before or after subcommands. A flag overrides its
+corresponding environment variable; directory fallbacks still prefer the
+timetrack directory over the XDG base over `HOME`.
+For example, `timetrack --config-home ./config show --data-home ./data`
+reads `./config/config.toml` and `./data/entries`.
+
 The configuration contains employee/accounting fields, a default attendance
 type, an attendance-type map, and a `[generate]` section. `make-config` creates
 a starting configuration; `timetrack edit config` opens it for changes. The
@@ -113,19 +119,21 @@ activity. `activity set` is the recommended way to create or update entries.
 
 ## Environment variables
 
-| Variable | Effect |
-| --- | --- |
-| `TIMETRACK_HOME` | Config and activity definitions directory; overrides the XDG config location. |
-| `TIMETRACK_DATA_HOME` | Entries directory; overrides the XDG data location. |
-| `XDG_CONFIG_HOME` | Base for config files; defaults to `~/.config`. |
-| `XDG_DATA_HOME` | Base for data files; defaults to `~/.local/share`. |
-| `HOME` | Used to construct the default XDG locations if those are unset. |
-| `EDITOR` | Editor used by `edit`; defaults to `vi`. |
-| `MAX_TABLE_WIDTH` | Unsigned integer maximum table width in terminal columns. If unset, table width follows the terminal when stdout is a TTY; redirected output is unbounded. If too small to fit the minimum column widths, the table keeps its natural width. |
-| `FORCE_COLOR` | Requests colored output; `NO_COLOR` may also disable colors, depending on color-support detection. |
+| Variable | Global flag | Effect |
+| --- | --- | --- |
+| `TIMETRACK_HOME` | `--config-home <DIR>` | Config and activity definitions directory; overrides the XDG config location. |
+| `TIMETRACK_DATA_HOME` | `--data-home <DIR>` | Entries directory; overrides the XDG data location. |
+| `XDG_CONFIG_HOME` | None | Base for config files; defaults to `~/.config`. |
+| `XDG_DATA_HOME` | None | Base for data files; defaults to `~/.local/share`. |
+| `HOME` | None | Used to construct the default XDG locations if those are unset. |
+| `EDITOR` | `--editor <EDITOR>` / `-e` | Editor used by `edit`; defaults to `vi`. |
+| `MAX_TABLE_WIDTH` | `--max-table-width <MAX_TABLE_WIDTH>` | Unsigned integer maximum table width in terminal columns. If unset, table width follows the terminal when stdout is a TTY; redirected output is unbounded. If too small to fit the minimum column widths, the table keeps its natural width. |
+| `FORCE_COLOR` | `--force-color` | Forces colored output, taking precedence over `NO_COLOR` / `--no-color`. `0` and `false` do not force color; other values (including empty) do. |
+| `NO_COLOR` | `--no-color` | Disables colors unless forced. Any value except `0` (including empty) disables colors. |
 
 `MAX_TABLE_WIDTH` also applies to redirected table output when explicitly set.
 Tables may truncate cell contents to fit the configured width.
+Invalid widths are reported as CLI argument errors.
 
 ## Build
 

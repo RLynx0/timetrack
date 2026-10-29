@@ -100,6 +100,15 @@ complete -c timetrack -f \
     -n 'not __fish_seen_subcommand_from start end show edit generate activity make-config list-attendance-types help' \
     -a '(__timetrack_subcommands)'
 
+# Global environment options
+for option in config-home data-home
+    complete -c timetrack -r -l $option -a '(__fish_complete_directories)'
+end
+complete -c timetrack -x -l max-table-width
+complete -c timetrack -f -l force-color
+complete -c timetrack -f -l no-color
+complete -c timetrack -x -l editor -s e -a '(__fish_complete_command)'
+
 # Subcommand start
 complete -c timetrack -f \
     -n '__fish_seen_subcommand_from start' \
@@ -125,10 +134,6 @@ complete -c timetrack \
 complete -c timetrack -f \
     -n '__fish_seen_subcommand_from edit' \
     -a "(__timetrack_edit_options)"
-complete -c timetrack \
-    -xl editor -s e \
-    -n '__fish_seen_subcommand_from edit' \
-    -a '(__fish_complete_command)'
 complete -c timetrack \
     -fl help -s h \
     -n '__fish_seen_subcommand_from edit'

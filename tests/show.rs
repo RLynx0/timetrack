@@ -32,14 +32,19 @@ impl Fixture {
     }
 
     fn command(&self, args: &[&str]) -> Command {
+        let mut command = self.root_command();
+        command.arg("show").args(args);
+        command
+    }
+
+    fn root_command(&self) -> Command {
         let mut command = Command::new(env!("CARGO_BIN_EXE_timetrack"));
         command
-            .arg("show")
-            .args(args)
             .env("TIMETRACK_HOME", &self.0)
             .env("TIMETRACK_DATA_HOME", &self.0)
             .env("TZ", "UTC")
             .env("NO_COLOR", "1")
+            .env_remove("FORCE_COLOR")
             .env_remove("MAX_TABLE_WIDTH");
         command
     }
@@ -128,9 +133,252 @@ fn invalid_max_table_width_reports_an_error() {
             .env("MAX_TABLE_WIDTH", width)
             .output()
             .unwrap();
-        assert!(!output.status.success(), "{width:?}");
+        assert_eq!(output.status.code(), Some(2), "{width:?}");
         assert!(String::from_utf8_lossy(&output.stderr).contains("MAX_TABLE_WIDTH"));
     }
+}
+
+#[test]
+fn global_directory_flags_override_env_before_and_after_subcommands() {
+    let entries = start(time("2025-01-02T09:00:00Z"), "chosen-data", "ON")
+        + &end(time("2025-01-02T10:00:00Z"));
+    let config = Fixture::new("");
+    let data = Fixture::new(&entries);
+    for before in [true, false] {
+        let mut command = config.root_command();
+        command
+            .env("TIMETRACK_HOME", config.0.join("missing"))
+            .env("TIMETRACK_DATA_HOME", data.0.join("missing"));
+        if !before {
+            command.args(["show", "-r", "1"]);
+        }
+        command
+            .arg("--config-home")
+            .arg(&config.0)
+            .arg("--data-home")
+            .arg(&data.0);
+        if before {
+            command.args(["show", "-r", "1"]);
+        }
+        let output = command.output().unwrap();
+        assert!(
+            output.status.success(),
+            "{}",
+            String::from_utf8_lossy(&output.stderr)
+        );
+        assert!(String::from_utf8_lossy(&output.stdout).contains("chosen-data"));
+    }
+}
+
+#[test]
+fn home_and_xdg_environment_preserve_directory_fallbacks() {
+    let entries = start(time("2025-01-02T09:00:00Z"), "fallback-data", "ON")
+        + &end(time("2025-01-02T10:00:00Z"));
+    let fixture = Fixture::new(&entries);
+    for base in [".config", "config-base"] {
+        let path = fixture.0.join(base).join("timetrack");
+        fs::create_dir_all(&path).unwrap();
+        fs::copy(fixture.0.join("config.toml"), path.join("config.toml")).unwrap();
+    }
+    for base in [".local/share", "data-base"] {
+        let path = fixture.0.join(base).join("timetrack");
+        fs::create_dir_all(&path).unwrap();
+        fs::copy(fixture.0.join("entries"), path.join("entries")).unwrap();
+    }
+
+    for xdg in [false, true] {
+        let mut command = fixture.root_command();
+        command.env_clear().env("TZ", "UTC").env("NO_COLOR", "1");
+        if xdg {
+            command
+                .env("HOME", fixture.0.join("missing"))
+                .env("XDG_CONFIG_HOME", fixture.0.join("config-base"))
+                .env("XDG_DATA_HOME", fixture.0.join("data-base"));
+        } else {
+            command.env("HOME", &fixture.0);
+        }
+        let output = command.args(["show", "-r", "1"]).output().unwrap();
+        assert!(
+            output.status.success(),
+            "{}",
+            String::from_utf8_lossy(&output.stderr)
+        );
+        assert!(String::from_utf8_lossy(&output.stdout).contains("fallback-data"));
+    }
+}
+
+#[test]
+fn missing_home_reports_directory_fallback_error() {
+    let fixture = Fixture::new("");
+    let output = fixture.command(&[]).env_clear().output().unwrap();
+    assert!(!output.status.success());
+    let error = String::from_utf8_lossy(&output.stderr);
+    assert!(error.contains("failed to show"));
+    assert!(error.contains("environment variable not found"));
+}
+
+#[test]
+fn max_table_width_flag_overrides_env() {
+    let description = "A description longer than a typical terminal width ".repeat(5);
+    let entries = start(time("2025-01-02T09:00:00Z"), &description, "ON")
+        + &end(time("2025-01-02T10:00:00Z"));
+    let fixture = Fixture::new(&entries);
+    for before in [true, false] {
+        let mut command = fixture.root_command();
+        command.env("MAX_TABLE_WIDTH", "120");
+        if before {
+            command.args(["--max-table-width", "80"]);
+        }
+        command.args(["show", "-r", "1"]);
+        if !before {
+            command.args(["--max-table-width", "80"]);
+        }
+        let output = command.output().unwrap();
+        assert!(
+            output.status.success(),
+            "{}",
+            String::from_utf8_lossy(&output.stderr)
+        );
+        let table = String::from_utf8(output.stdout).unwrap();
+        assert!(table.contains("..."));
+        assert!(
+            table
+                .lines()
+                .all(|line| unicode_width::UnicodeWidthStr::width(line) == 80)
+        );
+    }
+}
+
+#[test]
+fn color_flags_and_environment_preserve_force_precedence() {
+    let fixture = Fixture::new(&start(time("2025-01-02T09:00:00Z"), "work", "ON"));
+    for (flags, force, no, colored) in [
+        (vec!["--force-color"], None, Some("1"), true),
+        (vec!["--no-color"], None, None, false),
+        (vec!["--force-color", "--no-color"], None, None, true),
+        (vec![], Some("1"), Some("1"), true),
+        (vec![], Some(""), Some("1"), true),
+        (vec![], Some("0"), Some(""), false),
+        (vec![], Some("false"), Some("false"), false),
+    ] {
+        let mut command = fixture.command(&flags);
+        command.env_remove("NO_COLOR");
+        if let Some(value) = force {
+            command.env("FORCE_COLOR", value);
+        }
+        if let Some(value) = no {
+            command.env("NO_COLOR", value);
+        }
+        let output = command.output().unwrap();
+        assert!(
+            output.status.success(),
+            "{}",
+            String::from_utf8_lossy(&output.stderr)
+        );
+        assert_eq!(
+            output.stdout.contains(&0x1b),
+            colored,
+            "{flags:?} {force:?} {no:?}"
+        );
+    }
+}
+
+#[test]
+fn clap_help_lists_environment_flags_without_custom_block() {
+    let fixture = Fixture::new("");
+    for args in [
+        vec!["--help"],
+        vec!["show", "--help"],
+        vec!["activity", "ls", "--help"],
+        vec!["edit", "--help"],
+    ] {
+        let output = fixture.root_command().args(args).output().unwrap();
+        assert!(output.status.success());
+        let help = String::from_utf8(output.stdout).unwrap();
+        assert!(help.contains("--max-table-width"));
+        assert!(help.contains("[env: MAX_TABLE_WIDTH="));
+        assert!(help.contains("--editor"));
+        assert!(help.contains("[env: EDITOR="));
+        assert!(help.contains("--config-home"));
+        assert!(help.contains("--data-home"));
+        assert!(!help.contains("--xdg-"));
+        assert!(!help.contains("--home"));
+        assert!(!help.contains("Environment variables:"));
+    }
+}
+
+#[cfg(unix)]
+#[test]
+fn global_editor_flag_overrides_env_and_keeps_edit_short_flag() {
+    let fixture = Fixture::new("");
+    for before in [true, false] {
+        let mut command = fixture.root_command();
+        command.env("EDITOR", "missing-timetrack-editor");
+        if before {
+            command.args(["--editor", "/bin/echo", "edit", "config"]);
+        } else {
+            command.args(["edit", "config", "-e", "/bin/echo"]);
+        }
+        let output = command.output().unwrap();
+        assert!(
+            output.status.success(),
+            "{}",
+            String::from_utf8_lossy(&output.stderr)
+        );
+        assert_eq!(
+            String::from_utf8(output.stdout).unwrap().trim(),
+            fixture.0.join("config.toml").to_str().unwrap()
+        );
+    }
+}
+
+#[test]
+fn nested_activity_commands_use_global_paths_and_table_width() {
+    let fixture = Fixture::new("");
+    let config_home = fixture.0.join("selected-config");
+    let description = "A description longer than the configured table width";
+    let output = fixture
+        .root_command()
+        .args([
+            "activity",
+            "set",
+            "team/task",
+            "1234",
+            "--description",
+            description,
+        ])
+        .arg("--config-home")
+        .arg(&config_home)
+        .output()
+        .unwrap();
+    assert!(
+        output.status.success(),
+        "{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    assert!(config_home.join("activities").exists());
+    assert!(!fixture.0.join("activities").exists());
+
+    let output = fixture
+        .root_command()
+        .args(["activity", "ls", "--recursive", "--max-table-width", "40"])
+        .arg("--config-home")
+        .arg(&config_home)
+        .output()
+        .unwrap();
+    assert!(
+        output.status.success(),
+        "{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    let table = String::from_utf8(output.stdout).unwrap();
+    assert!(table.contains("team/task"));
+    assert!(table.contains("..."));
+    assert!(
+        table
+            .lines()
+            .all(|line| unicode_width::UnicodeWidthStr::width(line) == 40)
+    );
 }
 
 #[test]

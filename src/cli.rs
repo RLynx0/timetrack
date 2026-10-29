@@ -1,7 +1,9 @@
 use clap::ValueEnum;
 pub use clap::{Parser, Subcommand};
 
-use crate::{activity_range::ActivityRange, trackable::BUILTIN_ACTIVITY_IDLE_NAME};
+use crate::{
+    activity_range::ActivityRange, environment::Environment, trackable::BUILTIN_ACTIVITY_IDLE_NAME,
+};
 
 const RANGE_HELP: &str = "\
 - <n>     Show the last <n> completed results plus the active result, if any
@@ -32,67 +34,39 @@ Examples:
 - 3d..                       From the bucket three days ago through now
 - ..                         Everything recorded through now";
 
-const ENVIRONMENT_HELP: &str = "\
-Environment variables:
-  TIMETRACK_HOME       Config and activity definitions directory
-  TIMETRACK_DATA_HOME  Activity entries directory
-  XDG_CONFIG_HOME      Config base directory; defaults to ~/.config
-  XDG_DATA_HOME        Data base directory; defaults to ~/.local/share
-  HOME                 Used when the XDG base directories are not set
-  EDITOR               Editor for 'edit' (defaults to vi)
-  MAX_TABLE_WIDTH      Maximum table width in columns; an unsigned integer.
-                       If unset, tables fit the terminal when stdout is a TTY;
-                       redirected output is not width-limited. If too small to
-                       fit minimum columns, the table keeps its natural width.
-  FORCE_COLOR          Force colored output (color support may also honor NO_COLOR).
-
-TIMETRACK_HOME and TIMETRACK_DATA_HOME override the XDG directories directly.
-Without overrides, config files are stored under XDG_CONFIG_HOME/timetrack
-(default ~/.config/timetrack) and entries under XDG_DATA_HOME/timetrack
-(default ~/.local/share/timetrack).";
-
 #[derive(Debug, Clone, Parser)]
 #[command(author, version, about, long_about = None)]
 #[command(propagate_version = true)]
-#[command(after_help = ENVIRONMENT_HELP)]
 pub struct Cli {
+    #[command(flatten)]
+    pub environment: Environment,
+
     #[command(subcommand)]
     pub command: TtrCommand,
 }
 
 #[derive(Debug, Clone, Subcommand)]
 pub enum TtrCommand {
-    #[command(after_help = ENVIRONMENT_HELP)]
     Start(Start),
-    #[command(after_help = ENVIRONMENT_HELP)]
     End(End),
-    #[command(after_help = ENVIRONMENT_HELP)]
     Show(Show),
-    #[command(after_help = ENVIRONMENT_HELP)]
     Edit(Edit),
-    #[command(after_help = ENVIRONMENT_HELP)]
     Generate(Generate),
-    #[command(subcommand, after_help = ENVIRONMENT_HELP)]
+    #[command(subcommand)]
     Activity(ActivityCommand),
 
     // Convenience Commands
     /// Easily generate a timetrack configuration file
-    #[command(after_help = ENVIRONMENT_HELP)]
     MakeConfig,
-    #[command(after_help = ENVIRONMENT_HELP)]
     ListAttendanceTypes(ListAttendanceTypes),
 }
 
 /// Edit or list trackable activities
 #[derive(Debug, Clone, Subcommand)]
 pub enum ActivityCommand {
-    #[command(after_help = ENVIRONMENT_HELP)]
     Set(SetActivity),
-    #[command(after_help = ENVIRONMENT_HELP)]
     Rm(RemoveActivity),
-    #[command(after_help = ENVIRONMENT_HELP)]
     Mv(MoveActivity),
-    #[command(after_help = ENVIRONMENT_HELP)]
     Ls(ListActivities),
 }
 
@@ -168,10 +142,6 @@ pub struct Edit {
     /// Specify the timetrack file to open
     #[clap(default_value = "entries")]
     pub target: EditTarget,
-
-    /// Specify a program to open the file with
-    #[clap(short, long, env = "EDITOR", default_value = "vi")]
-    pub editor: String,
 }
 #[derive(Debug, Clone, ValueEnum)]
 pub enum EditTarget {

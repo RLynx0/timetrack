@@ -19,6 +19,7 @@ use crate::{
     activity_commands::get_trackable_activity,
     activity_entry::{ActivityEntry, TrackedActivity},
     cli,
+    environment::Environment,
     files::{self, get_activity_file_path, get_entry_file_path, get_main_config_path},
     get_config, print_smart_list,
     trackable::sanitize_description,
@@ -30,13 +31,13 @@ pub use show::show_activities;
 mod generate;
 mod show;
 
-pub fn start_activity(start_opts: &cli::Start) -> Result<()> {
-    let config = &get_config()?;
+pub fn start_activity(start_opts: &cli::Start, env: &Environment) -> Result<()> {
+    let config = &get_config(env)?;
     let activity_name: &str = &start_opts.activity;
-    let activity = get_trackable_activity(activity_name)?;
+    let activity = get_trackable_activity(activity_name, env)?;
     let wbs = activity.wbs();
 
-    let last_entry = get_last_entry()?;
+    let last_entry = get_last_entry(env)?;
     let last_attendance = last_entry.as_ref().and_then(|e| e.attendance_type());
     let attendance = start_opts
         .attendance
@@ -56,7 +57,7 @@ pub fn start_activity(start_opts: &cli::Start) -> Result<()> {
         .unwrap_or_default();
 
     let entry = ActivityEntry::new_start(activity_name, attendance, wbs, &description);
-    write_entry(&entry)?;
+    write_entry(&entry, env)?;
 
     if let Some(ActivityEntry::Start(last_start)) = last_entry.as_ref() {
         let last_name = last_start.name();
@@ -87,12 +88,12 @@ pub fn start_activity(start_opts: &cli::Start) -> Result<()> {
     Ok(())
 }
 
-pub fn end_activity(end_opts: &cli::End) -> Result<()> {
-    let last_entry = get_last_entry()?;
+pub fn end_activity(end_opts: &cli::End, env: &Environment) -> Result<()> {
+    let last_entry = get_last_entry(env)?;
     match last_entry.as_ref() {
         Some(ActivityEntry::Start(last_start)) => {
             let entry = ActivityEntry::new_end();
-            write_entry(&entry)?;
+            write_entry(&entry, env)?;
 
             let stopped = last_start.name();
             println!(
@@ -114,8 +115,8 @@ pub fn end_activity(end_opts: &cli::End) -> Result<()> {
     }
 }
 
-fn write_entry(entry: &ActivityEntry) -> Result<()> {
-    let path = files::get_entry_file_path()?;
+fn write_entry(entry: &ActivityEntry, env: &Environment) -> Result<()> {
+    let path = files::get_entry_file_path(env)?;
     if !fs::exists(&path)?
         && let Some(p) = path.parent()
     {
@@ -134,13 +135,13 @@ fn write_entry(entry: &ActivityEntry) -> Result<()> {
     Ok(())
 }
 
-pub fn handle_edit(edit_opts: &cli::Edit) -> Result<()> {
+pub fn handle_edit(edit_opts: &cli::Edit, env: &Environment) -> Result<()> {
     let path = match edit_opts.target {
-        cli::EditTarget::Entries => get_entry_file_path(),
-        cli::EditTarget::Config => get_main_config_path(),
-        cli::EditTarget::Activities => get_activity_file_path(),
+        cli::EditTarget::Entries => get_entry_file_path(env),
+        cli::EditTarget::Config => get_main_config_path(env),
+        cli::EditTarget::Activities => get_activity_file_path(env),
     }?;
-    open_editor_to_file(&edit_opts.editor, &path)
+    open_editor_to_file(&env.editor, &path)
 }
 
 /// Opens the activity log with `EDITOR`
@@ -153,8 +154,8 @@ fn open_editor_to_file(editor: &str, path: &Path) -> Result<()> {
 }
 
 /// Fetch the last recorded activity entry
-fn get_last_entry() -> Result<Option<ActivityEntry>> {
-    let path = &files::get_entry_file_path()?;
+fn get_last_entry(env: &Environment) -> Result<Option<ActivityEntry>> {
+    let path = &files::get_entry_file_path(env)?;
     if !fs::exists(path)? {
         return Ok(None);
     }
@@ -171,11 +172,12 @@ fn get_last_entry() -> Result<Option<ActivityEntry>> {
 }
 
 fn get_last_activities_until<T>(
+    env: &Environment,
     mut select: impl FnMut(&[TrackedActivity], bool) -> Option<T>,
 ) -> Result<T> {
     let mut count = 32;
     loop {
-        let activities = get_last_n_activities(count)?;
+        let activities = get_last_n_activities(count, env)?;
         let exhausted = activities
             .iter()
             .filter(|activity| activity.end_time().is_some())
@@ -194,8 +196,9 @@ fn get_activities_between(
     start: Option<DateTime<Local>>,
     end: DateTime<Local>,
     now: DateTime<Local>,
+    env: &Environment,
 ) -> Result<Vec<TrackedActivity>> {
-    let path = files::get_entry_file_path()?;
+    let path = files::get_entry_file_path(env)?;
     if !fs::exists(&path)? {
         return Ok(Vec::new());
     }
@@ -230,8 +233,8 @@ fn get_activities_between(
 
 /// Get the last `count` completed pieces plus the ongoing piece, in chronological order.
 /// Activities crossing midnight are split, except that zero selects the whole ongoing activity.
-fn get_last_n_activities(count: usize) -> Result<Vec<TrackedActivity>> {
-    let path = &files::get_entry_file_path()?;
+fn get_last_n_activities(count: usize, env: &Environment) -> Result<Vec<TrackedActivity>> {
+    let path = &files::get_entry_file_path(env)?;
     if !fs::exists(path)? {
         return Ok(Vec::new());
     }

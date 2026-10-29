@@ -10,14 +10,15 @@ use crate::{
     activity_range::ActivityRange,
     cli,
     config::Config,
+    environment::Environment,
     get_config,
 };
 
 use super::{get_activities_between, get_last_activities_until};
 
-pub fn handle_generate(generate_opts: &cli::Generate) -> Result<()> {
+pub fn handle_generate(generate_opts: &cli::Generate, env: &Environment) -> Result<()> {
     let now = Local::now();
-    let config = get_config()?;
+    let config = get_config(env)?;
     let range = match &generate_opts.range {
         Some(range) => range.clone(),
         None => config
@@ -35,11 +36,11 @@ pub fn handle_generate(generate_opts: &cli::Generate) -> Result<()> {
                 } else {
                     "Invalid generate.range"
                 })?;
-            let activities = get_activities_between(start, end, now)?;
+            let activities = get_activities_between(start, end, now, env)?;
             (collapse_activities(&activities, now), start)
         }
         ActivityRange::Count(count) => (
-            get_last_activities_until(|activities, exhausted| {
+            get_last_activities_until(env, |activities, exhausted| {
                 latest_collapsed(activities, count, exhausted, now)
             })?,
             None,

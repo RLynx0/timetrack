@@ -45,6 +45,8 @@ impl Fixture {
             .env("TIMETRACK_DATA_HOME", &self.0)
             .env("TZ", "UTC")
             .env("NO_COLOR", "1")
+            .env_remove("FORCE_COLOR")
+            .env_remove("MAX_TABLE_WIDTH")
             .output()
             .unwrap()
     }

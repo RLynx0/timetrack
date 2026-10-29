@@ -1,6 +1,5 @@
 use std::{
     borrow::Cow,
-    env,
     fmt::Display,
     io::{self, IsTerminal, Write},
     rc::Rc,
@@ -24,13 +23,10 @@ macro_rules! print_smart_list {
 
 #[macro_export]
 macro_rules! print_smart_table {
-    ($($k:expr => $vs: expr,)*) => {
+    ($options:expr; $($k:expr => $vs: expr,)*) => {
         $crate::printable::Table::from([
             $(($k, $vs)),*
-        ]).with_options($crate::printable::TablePrintOptions {
-            chars: $crate::printable::TableCharOptions::rounded(),
-            ..Default::default()
-        }).print();
+        ]).with_options($options).print();
     };
 }
 
@@ -40,22 +36,13 @@ pub struct TablePrintOptions {
     pub width: TableWidth,
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Default)]
 #[allow(dead_code)]
 pub enum TableWidth {
+    #[default]
     Auto,
     Unbounded,
     Fixed(usize),
-}
-
-impl Default for TableWidth {
-    fn default() -> Self {
-        env::var("MAX_TABLE_WIDTH")
-            .map(|w| w.parse())
-            .map(|wr| wr.expect("MAX_TABLE_WIDTH must be an unsigned integer"))
-            .map(Self::Fixed)
-            .unwrap_or(Self::Auto)
-    }
 }
 
 impl TableWidth {

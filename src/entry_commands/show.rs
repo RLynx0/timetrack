@@ -15,7 +15,9 @@ use crate::{
         },
     },
     activity_range::ActivityRange,
-    cli, get_config, print_smart_list, print_smart_table,
+    cli,
+    environment::Environment,
+    get_config, print_smart_list, print_smart_table,
 };
 
 use super::{
@@ -27,12 +29,12 @@ enum Selection {
     Latest(usize),
 }
 
-pub fn show_activities(show_opts: &cli::Show) -> Result<()> {
+pub fn show_activities(show_opts: &cli::Show, env: &Environment) -> Result<()> {
     let now = Local::now();
     let selection = match &show_opts.range {
         ActivityRange::Window(window) => {
             let (start, end) = window.resolve(now)?;
-            Selection::Window(get_activities_between(start, end, now)?)
+            Selection::Window(get_activities_between(start, end, now, env)?)
         }
         ActivityRange::Count(count) => Selection::Latest(*count),
     };
@@ -53,8 +55,8 @@ pub fn show_activities(show_opts: &cli::Show) -> Result<()> {
             );
         }
         match &selection {
-            Selection::Window(activities) => show_window(activities, mode, show_opts, now)?,
-            Selection::Latest(count) => show_latest(*count, mode, show_opts, now)?,
+            Selection::Window(activities) => show_window(activities, mode, show_opts, now, env)?,
+            Selection::Latest(count) => show_latest(*count, mode, show_opts, now, env)?,
         }
     }
     Ok(())
@@ -65,23 +67,26 @@ fn show_window(
     mode: &cli::ShowMode,
     show_opts: &cli::Show,
     now: DateTime<Local>,
+    env: &Environment,
 ) -> Result<()> {
     if activities.is_empty() {
-        return show_empty();
+        return show_empty(env);
     }
     match mode {
         cli::ShowMode::Entries => {
-            show_individual_activities(activities, show_opts.machine_readable)?
+            show_individual_activities(activities, show_opts.machine_readable, env)?
         }
         cli::ShowMode::Collapsed => print_collapsed(
             &collapse_activities(activities, now),
             show_opts.machine_readable,
             false,
+            env,
         )?,
         cli::ShowMode::Attendance => print_attendance(
             &get_attendance_ranges(activities),
             show_opts.machine_readable,
             false,
+            env,
         )?,
         cli::ShowMode::Time => show_activity_time(activities, show_opts.machine_readable),
     }
@@ -93,43 +98,44 @@ fn show_latest(
     mode: &cli::ShowMode,
     show_opts: &cli::Show,
     now: DateTime<Local>,
+    env: &Environment,
 ) -> Result<()> {
     let latest = count == 0;
-    if latest && *mode != cli::ShowMode::Entries && show_inactive(show_opts)? {
+    if latest && *mode != cli::ShowMode::Entries && show_inactive(show_opts, env)? {
         return Ok(());
     }
     match mode {
-        cli::ShowMode::Entries if latest => show_current_entry(show_opts)?,
+        cli::ShowMode::Entries if latest => show_current_entry(show_opts, env)?,
         cli::ShowMode::Entries | cli::ShowMode::Time => {
-            let activities = get_last_n_activities(count)?;
+            let activities = get_last_n_activities(count, env)?;
             if activities.is_empty() {
-                show_empty()?;
+                show_empty(env)?;
             } else if *mode == cli::ShowMode::Time {
                 show_activity_time(&activities, show_opts.machine_readable);
             } else {
-                show_individual_activities(&activities, show_opts.machine_readable)?;
+                show_individual_activities(&activities, show_opts.machine_readable, env)?;
             }
         }
         cli::ShowMode::Collapsed => {
-            let rows = get_last_activities_until(|activities, exhausted| {
+            let rows = get_last_activities_until(env, |activities, exhausted| {
                 latest_collapsed(activities, count, exhausted, now)
             })?;
-            print_collapsed(&rows, show_opts.machine_readable, latest)?;
+            print_collapsed(&rows, show_opts.machine_readable, latest, env)?;
         }
         cli::ShowMode::Attendance => {
-            let rows = get_last_activities_until(|activities, exhausted| {
+            let rows = get_last_activities_until(env, |activities, exhausted| {
                 latest_attendance_ranges(activities, count, exhausted)
             })?;
-            print_attendance(&rows, show_opts.machine_readable, latest)?;
+            print_attendance(&rows, show_opts.machine_readable, latest, env)?;
         }
     }
     Ok(())
 }
 
-fn show_inactive(show_opts: &cli::Show) -> Result<bool> {
-    match get_last_entry()? {
+fn show_inactive(show_opts: &cli::Show, env: &Environment) -> Result<bool> {
+    match get_last_entry(env)? {
         None => {
-            show_empty()?;
+            show_empty(env)?;
             Ok(true)
         }
         Some(ActivityEntry::End(_)) => {
@@ -142,16 +148,16 @@ fn show_inactive(show_opts: &cli::Show) -> Result<bool> {
     }
 }
 
-fn show_empty() -> Result<()> {
-    if get_last_entry()?.is_none() {
+fn show_empty(env: &Environment) -> Result<()> {
+    if get_last_entry(env)?.is_none() {
         println!("You have not recorded any data yet");
     } else {
         println!("You have not recorded any data in the requested timeframe");
     }
     Ok(())
 }
-fn show_current_entry(show_opts: &cli::Show) -> Result<()> {
-    let entry = get_last_entry()?;
+fn show_current_entry(show_opts: &cli::Show, env: &Environment) -> Result<()> {
+    let entry = get_last_entry(env)?;
     match entry {
         None => println!("You have not recorded any data yet"),
         Some(entry) if show_opts.machine_readable => println!("{entry}"),
@@ -166,7 +172,7 @@ fn show_current_entry(show_opts: &cli::Show) -> Result<()> {
                     .if_supports_color(Stream::Stdout, |n| n.green())
             );
 
-            let config = get_config()?;
+            let config = get_config(env)?;
             let delta = Local::now() - entry.time_stamp();
             let attendance = entry.attendance();
             let attendance_str = match config.attendance_types.get(attendance) {
@@ -191,19 +197,20 @@ fn show_current_entry(show_opts: &cli::Show) -> Result<()> {
 fn show_individual_activities(
     activities: &[TrackedActivity],
     machine_readable: bool,
+    env: &Environment,
 ) -> Result<()> {
     if machine_readable {
         for activity in activities {
             println!("{activity}");
         }
     } else {
-        print_activitiy_table(activities)?;
+        print_activitiy_table(activities, env)?;
     }
 
     Ok(())
 }
 
-fn print_activitiy_table(activities: &[TrackedActivity]) -> Result<()> {
+fn print_activitiy_table(activities: &[TrackedActivity], env: &Environment) -> Result<()> {
     let mut col_date: Vec<Rc<str>> = Vec::new();
     let mut col_start: Vec<Rc<str>> = Vec::new();
     let mut col_end: Vec<Rc<str>> = Vec::new();
@@ -219,7 +226,7 @@ fn print_activitiy_table(activities: &[TrackedActivity]) -> Result<()> {
         let time_to = activity.end_time().copied().unwrap_or(Local::now());
         let hours = (time_to - start).as_seconds_f64() / 3600.0;
 
-        let config = get_config()?;
+        let config = get_config(env)?;
         let attendance = activity.attendance();
         let attendance_str = match config.attendance_types.get(attendance) {
             Some(hint) if !hint.trim().is_empty() => format!("{attendance} ({hint})"),
@@ -243,6 +250,7 @@ fn print_activitiy_table(activities: &[TrackedActivity]) -> Result<()> {
     }
 
     print_smart_table! {
+        env.table_options();
         "Date" => col_date,
         "Start" => col_start,
         "Hours" => col_hours,
@@ -264,15 +272,16 @@ fn print_collapsed(
     collapsed_activities: &[CollapsedActivity],
     machine_readable: bool,
     single: bool,
+    env: &Environment,
 ) -> Result<()> {
     if collapsed_activities.is_empty() {
-        show_empty()?;
+        show_empty(env)?;
     } else if machine_readable {
         for collapsed in collapsed_activities {
             println!("{collapsed}");
         }
     } else {
-        print_collapsed_activity_table(collapsed_activities, single)?
+        print_collapsed_activity_table(collapsed_activities, single, env)?
     }
 
     Ok(())
@@ -281,6 +290,7 @@ fn print_collapsed(
 fn print_collapsed_activity_table(
     collapsed_activities: &[CollapsedActivity],
     single: bool,
+    env: &Environment,
 ) -> Result<()> {
     let mut col_date: Vec<Rc<str>> = Vec::new();
     let mut col_hours: Vec<Rc<str>> = Vec::new();
@@ -293,7 +303,7 @@ fn print_collapsed_activity_table(
         let start = collapsed.start_time();
         let hours = collapsed.duration().as_seconds_f64() / 3600.0;
 
-        let config = get_config()?;
+        let config = get_config(env)?;
         let attendance = collapsed.attendance();
         let attendance_str = match config.attendance_types.get(attendance) {
             Some(hint) if !hint.trim().is_empty() => format!("{attendance} ({hint})"),
@@ -321,6 +331,7 @@ fn print_collapsed_activity_table(
         return Ok(());
     }
     print_smart_table! {
+        env.table_options();
         "Date" => col_date,
         "Hours" => col_hours,
         "WBS" => col_wbs,
@@ -339,21 +350,26 @@ fn print_attendance(
     ranges: &[AttendanceRange],
     machine_readable: bool,
     single: bool,
+    env: &Environment,
 ) -> Result<()> {
     if ranges.is_empty() {
-        show_empty()?;
+        show_empty(env)?;
     } else if machine_readable {
         for range in ranges {
             println!("{range}");
         }
     } else {
-        print_attendance_table(ranges, single)?;
+        print_attendance_table(ranges, single, env)?;
     }
 
     Ok(())
 }
 
-fn print_attendance_table(ranges: &[AttendanceRange], single: bool) -> Result<()> {
+fn print_attendance_table(
+    ranges: &[AttendanceRange],
+    single: bool,
+    env: &Environment,
+) -> Result<()> {
     let mut col_date: Vec<Rc<str>> = Vec::new();
     let mut col_start: Vec<Rc<str>> = Vec::new();
     let mut col_end: Vec<Rc<str>> = Vec::new();
@@ -382,7 +398,7 @@ fn print_attendance_table(ranges: &[AttendanceRange], single: bool) -> Result<()
         let hours = delta.as_seconds_f64() / 3600.0;
         let hours_adjusted = delta_adjusted.as_seconds_f64() / 3600.0;
 
-        let config = get_config()?;
+        let config = get_config(env)?;
         let attendance = range.attendance();
         let attendance_str = match config.attendance_types.get(attendance) {
             Some(hint) if !hint.trim().is_empty() => format!("{attendance} ({hint})"),
@@ -409,6 +425,7 @@ fn print_attendance_table(ranges: &[AttendanceRange], single: bool) -> Result<()
         return Ok(());
     }
     print_smart_table! {
+        env.table_options();
         "Date" => col_date,
         "Start" => col_start,
         "End" => col_end,
