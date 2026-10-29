@@ -49,6 +49,7 @@ impl TrackedActivity {
             end: Some(end),
         }
     }
+    #[cfg(test)]
     pub fn new_ongoing(start_entry: ActivityStart) -> Self {
         TrackedActivity {
             start_entry,

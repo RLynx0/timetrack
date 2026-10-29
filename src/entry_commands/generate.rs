@@ -1,30 +1,50 @@
 use std::{collections::HashMap, fs, io::Write, path::PathBuf, rc::Rc};
 
 use chrono::{Datelike, Local, NaiveDate};
-use color_eyre::eyre::{Result, format_err};
+use color_eyre::eyre::{Result, WrapErr, format_err};
 
 use crate::{
-    activity_entry::activity_groupings::{CollapsedActivity, collapse_activities},
+    activity_entry::activity_groupings::{
+        CollapsedActivity, collapse_activities, latest_collapsed,
+    },
+    activity_range::ActivityRange,
     cli,
     config::Config,
     get_config,
-    time_window::{Direction, Relative, TimePoint, Unit},
 };
 
-use super::get_activities_since;
+use super::{get_activities_between, get_last_activities_until};
 
 pub fn handle_generate(generate_opts: &cli::Generate) -> Result<()> {
     let now = Local::now();
-    let start_time = TimePoint::Relative(Relative {
-        count: 0,
-        unit: Unit::Month,
-    })
-    .bounds(now, Direction::Backward)?
-    .0;
-    let activities = get_activities_since(&start_time)?;
-    let collapsed = collapse_activities(&activities, now);
-
     let config = get_config()?;
+    let range = match &generate_opts.range {
+        Some(range) => range.clone(),
+        None => config
+            .generate
+            .range
+            .parse::<ActivityRange>()
+            .wrap_err("Invalid generate.range")?,
+    };
+    let (collapsed, start) = match range {
+        ActivityRange::Window(window) => {
+            let (start, end) = window
+                .resolve(now)
+                .wrap_err(if generate_opts.range.is_some() {
+                    "Invalid --range"
+                } else {
+                    "Invalid generate.range"
+                })?;
+            let activities = get_activities_between(start, end, now)?;
+            (collapse_activities(&activities, now), start)
+        }
+        ActivityRange::Count(count) => (
+            get_last_activities_until(|activities, exhausted| {
+                latest_collapsed(activities, count, exhausted, now)
+            })?,
+            None,
+        ),
+    };
     let keys = config.generate.keys.join(&config.generate.delimiter);
     let lines = collapsed
         .iter()
@@ -46,7 +66,11 @@ pub fn handle_generate(generate_opts: &cli::Generate) -> Result<()> {
         return Ok(());
     }
 
-    let file_vars = vars_per_generated_file(&config, start_time.date_naive());
+    let file_date = start
+        .map(|start| start.date_naive())
+        .or_else(|| collapsed.first().map(|row| row.start_time().date_naive()))
+        .unwrap_or_else(|| now.date_naive());
+    let file_vars = vars_per_generated_file(&config, file_date);
     let default_name = config.generate.file_name_format.evaluate(&file_vars)?;
     let file_path = generate_opts.file_path.as_ref().unwrap_or(&default_name);
     let mut file_path = PathBuf::from(file_path);

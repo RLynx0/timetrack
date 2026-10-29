@@ -3,6 +3,35 @@ pub use clap::{Parser, Subcommand};
 
 use crate::{activity_range::ActivityRange, trackable::BUILTIN_ACTIVITY_IDLE_NAME};
 
+const RANGE_HELP: &str = "\
+- <n>     Show the last <n> completed results plus the active result, if any
+
+Relative periods (include the current bucket):
+- <n>h | <n>hours    The last <n> hours plus the current hour
+- <n>d | <n>days     The last <n> days plus the current day
+- <n>w | <n>weeks    The last <n> weeks plus the current week
+- <n>m | <n>months   The last <n> months plus the current month
+- hour, day, week, month  Aliases for 0h, 0d, 0w, 0m
+
+Absolute buckets:
+- YYYY-MM | YYYY-MM-DD        Select that month or day
+- YYYY..YYYY                  Select that year (a bare number is a count)
+
+Ranges use inclusive calendar buckets. A relative endpoint is measured from now,
+except in Bucket..Nunit, where the right endpoint is measured forward from Bucket.
+A relative endpoint before an absolute bucket (Nunit..Bucket) is not supported.
+Counts may only be used alone.
+
+Examples:
+- 3m                         Three completed months and the current month
+- 2026-02                    The February 2026 bucket
+- 2025-02-03..2026-01-16     From February 3, 2025 through January 16, 2026
+- 2026-01-01..7d             From January 1 through the bucket seven days later
+- 3m..1m                     From the bucket three months ago through one month ago
+- ..3d                       Everything through the bucket three days ago
+- 3d..                       From the bucket three days ago through now
+- ..                         Everything recorded through now";
+
 #[derive(Debug, Clone, Parser)]
 #[command(author, version, about, long_about = None)]
 #[command(propagate_version = true)]
@@ -88,37 +117,13 @@ pub struct Show {
     pub mode: Vec<ShowMode>,
 
     /// Select results by count, relative time, date bucket, or range
-    ///
-    /// Counts:
-    /// - 0       Show only the currently active activity (default)
-    /// - <n>     Show the last <n> completed results plus the active result, if any
-    ///
-    /// Relative periods (include the current bucket):
-    /// - <n>h | <n>hours    The last <n> hours plus the current hour
-    /// - <n>d | <n>days     The last <n> days plus the current day
-    /// - <n>w | <n>weeks    The last <n> weeks plus the current week
-    /// - <n>m | <n>months   The last <n> months plus the current month
-    /// - hour, day, week, month  Aliases for 0h, 0d, 0w, 0m
-    ///
-    /// Absolute buckets:
-    /// - YYYY-MM | YYYY-MM-DD        Select that month or day
-    /// - YYYY..YYYY                  Select that year (a bare number is a count)
-    ///
-    /// Ranges use inclusive calendar buckets. A relative endpoint is measured from now,
-    /// except in Bucket..Nunit, where the right endpoint is measured forward from Bucket.
-    /// A relative endpoint before an absolute bucket (Nunit..Bucket) is not supported.
-    /// Counts may only be used alone.
-    ///
-    /// Examples:
-    /// - 3m                         Three completed months and the current month
-    /// - 2026-02                    The February 2026 bucket
-    /// - 2025-02-03..2026-01-16     From February 3, 2025 through January 16, 2026
-    /// - 2026-01-01..7d             From January 1 through the bucket seven days later
-    /// - 3m..1m                     From the bucket three months ago through one month ago
-    /// - ..3d                       Everything through the bucket three days ago
-    /// - 3d..                       From the bucket three days ago through now
-    /// - ..                         Everything recorded through now
-    #[clap(verbatim_doc_comment, short, long, default_value = "0")]
+    #[clap(
+        short, long, default_value = "0",
+        long_help = format!(
+            "Select results by count, relative time, date bucket, or range\n\n\
+             Counts:\n- 0       Show only the currently active activity (default)\n{RANGE_HELP}"
+        )
+    )]
     pub range: ActivityRange,
 
     /// Print machine readable values instead of a formatted table
@@ -158,7 +163,7 @@ pub enum EditTarget {
     Activities,
 }
 
-/// Generate output file for a specified time frame
+/// Generate output file for the configured or specified range
 #[derive(Debug, Clone, Parser)]
 pub struct Generate {
     /// Print to stdout instead of saving to file
@@ -168,6 +173,17 @@ pub struct Generate {
     /// Save to custom filepath
     #[clap(short, long)]
     pub file_path: Option<String>,
+
+    /// Override generate.range from config (defaults to month)
+    #[clap(
+        short, long,
+        long_help = format!(
+            "Override generate.range from config (defaults to month)\n\
+             Counts select collapsed results, as with show collapsed --range.\n\n\
+             Counts:\n- 0       Show only the currently active activity\n{RANGE_HELP}"
+        )
+    )]
+    pub range: Option<ActivityRange>,
 }
 
 /// Define a new trackable activity

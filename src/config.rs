@@ -24,4 +24,10 @@ pub struct GenerateConfig {
     pub keys: Vec<String>,
     pub values: Vec<FormatString>,
     pub delimiter: String,
+    #[serde(default = "default_generate_range")]
+    pub range: String,
+}
+
+fn default_generate_range() -> String {
+    "month".into()
 }

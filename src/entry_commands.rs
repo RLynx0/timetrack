@@ -17,7 +17,7 @@ use rev_lines::RawRevLines;
 
 use crate::{
     activity_commands::get_trackable_activity,
-    activity_entry::{ActivityEntry, ActivityStart, TrackedActivity},
+    activity_entry::{ActivityEntry, TrackedActivity},
     cli,
     files::{self, get_activity_file_path, get_entry_file_path, get_main_config_path},
     get_config, print_smart_list,
@@ -274,53 +274,6 @@ fn get_last_n_activities(count: usize) -> Result<Vec<TrackedActivity>> {
     }
 
     Ok(activities.into_iter().rev().collect())
-}
-
-/// Get activities since `start_time` in chronological order
-/// Activities crossing over midnight will be automatically split
-fn get_activities_since(start_time: &DateTime<Local>) -> Result<Vec<TrackedActivity>> {
-    let mut activities = Vec::new();
-    let mut last_activity_start: Option<ActivityStart> = None;
-    for entry in get_backwards_entries_since(start_time)?.into_iter().rev() {
-        if let Some(last) = last_activity_start {
-            activities.extend(
-                TrackedActivity::new_completed(last, *entry.time_stamp())
-                    .split_on_midnight(Local::now())
-                    .filter(|a| a.end_time().map(|t| t >= start_time).unwrap_or(true)),
-            );
-        }
-        last_activity_start = match entry {
-            ActivityEntry::Start(activity_start) => Some(activity_start),
-            ActivityEntry::End(_) => None,
-        };
-    }
-    if let Some(last) = last_activity_start {
-        activities.push(TrackedActivity::new_ongoing(last));
-    }
-    Ok(activities)
-}
-
-/// Fetch entries since `start_time` in reversed order
-/// The first entry before `start_time` will also be included
-/// This allows showing an activity that was currently running at `start_time`
-fn get_backwards_entries_since(start_time: &DateTime<Local>) -> Result<Vec<ActivityEntry>> {
-    let path = &files::get_entry_file_path()?;
-    if !fs::exists(path)? {
-        return Ok(Vec::new());
-    }
-    let mut entries = Vec::new();
-    let file = fs::File::open(path)?;
-    for line in RawRevLines::new(file) {
-        let Some(entry) = entry_from_byte_result(line)? else {
-            continue;
-        };
-        let time = *entry.time_stamp();
-        entries.push(entry);
-        if &time <= start_time {
-            break;
-        }
-    }
-    Ok(entries)
 }
 
 fn entry_from_byte_result(
