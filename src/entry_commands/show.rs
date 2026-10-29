@@ -1,10 +1,3 @@
-use std::rc::Rc;
-
-use chrono::{DateTime, DurationRound, Local, TimeDelta};
-use color_eyre::eyre::Result;
-use itertools::Itertools;
-use owo_colors::{OwoColorize, Stream};
-
 use crate::{
     NONE_PRINT_VALUE,
     activity_entry::{
@@ -16,9 +9,14 @@ use crate::{
     },
     activity_range::ActivityRange,
     cli,
+    config::Config,
     environment::Environment,
-    get_config, print_smart_list, print_smart_table,
+    print_smart_list, print_smart_table,
+    style::green,
 };
+use chrono::{DateTime, DurationRound, Local, TimeDelta};
+use color_eyre::eyre::Result;
+use itertools::Itertools;
 
 use super::{
     get_activities_between, get_last_activities_until, get_last_entry, get_last_n_activities,
@@ -44,15 +42,7 @@ pub fn show_activities(show_opts: &cli::Show, env: &Environment) -> Result<()> {
             println!();
         }
         if show_opts.mode.len() > 1 {
-            println!(
-                ":{}",
-                match mode {
-                    cli::ShowMode::Entries => "Entries",
-                    cli::ShowMode::Collapsed => "Collapsed",
-                    cli::ShowMode::Attendance => "Attendance",
-                    cli::ShowMode::Time => "Time",
-                }
-            );
+            println!(":{}", mode.title());
         }
         match &selection {
             Selection::Window(activities) => show_window(activities, mode, show_opts, now, env)?,
@@ -74,7 +64,7 @@ fn show_window(
     }
     match mode {
         cli::ShowMode::Entries => {
-            show_individual_activities(activities, show_opts.machine_readable, env)?
+            show_individual_activities(activities, show_opts.machine_readable, now, env)?
         }
         cli::ShowMode::Collapsed => print_collapsed(
             &collapse_activities(activities, now),
@@ -86,9 +76,10 @@ fn show_window(
             &get_attendance_ranges(activities),
             show_opts.machine_readable,
             false,
+            now,
             env,
         )?,
-        cli::ShowMode::Time => show_activity_time(activities, show_opts.machine_readable),
+        cli::ShowMode::Time => show_activity_time(activities, show_opts.machine_readable, now),
     }
     Ok(())
 }
@@ -111,9 +102,9 @@ fn show_latest(
             if activities.is_empty() {
                 show_empty(env)?;
             } else if *mode == cli::ShowMode::Time {
-                show_activity_time(&activities, show_opts.machine_readable);
+                show_activity_time(&activities, show_opts.machine_readable, now);
             } else {
-                show_individual_activities(&activities, show_opts.machine_readable, env)?;
+                show_individual_activities(&activities, show_opts.machine_readable, now, env)?;
             }
         }
         cli::ShowMode::Collapsed => {
@@ -126,7 +117,7 @@ fn show_latest(
             let rows = get_last_activities_until(env, |activities, exhausted| {
                 latest_attendance_ranges(activities, count, exhausted)
             })?;
-            print_attendance(&rows, show_opts.machine_readable, latest, env)?;
+            print_attendance(&rows, show_opts.machine_readable, latest, now, env)?;
         }
     }
     Ok(())
@@ -165,20 +156,12 @@ fn show_current_entry(show_opts: &cli::Show, env: &Environment) -> Result<()> {
             println!("You are not tracking any activity")
         }
         Some(ActivityEntry::Start(entry)) => {
-            println!(
-                "Tracking activity '{}'",
-                entry
-                    .name()
-                    .if_supports_color(Stream::Stdout, |n| n.green())
-            );
+            println!("Tracking activity '{}'", green(entry.name()));
 
-            let config = get_config(env)?;
+            let config = Config::load(env)?;
             let delta = Local::now() - entry.time_stamp();
             let attendance = entry.attendance();
-            let attendance_str = match config.attendance_types.get(attendance) {
-                Some(hint) if !hint.trim().is_empty() => format!("{attendance} ({hint})"),
-                _ => attendance.to_string(),
-            };
+            let attendance_str = config.attendance_label(attendance);
             print_smart_list! {
                 "Description" => entry.description(),
                 "Attendance" => &attendance_str,
@@ -197,6 +180,7 @@ fn show_current_entry(show_opts: &cli::Show, env: &Environment) -> Result<()> {
 fn show_individual_activities(
     activities: &[TrackedActivity],
     machine_readable: bool,
+    now: DateTime<Local>,
     env: &Environment,
 ) -> Result<()> {
     if machine_readable {
@@ -204,48 +188,49 @@ fn show_individual_activities(
             println!("{activity}");
         }
     } else {
-        print_activitiy_table(activities, env)?;
+        let config = Config::load(env)?;
+        print_activity_table(activities, &config, now, env)?;
     }
 
     Ok(())
 }
 
-fn print_activitiy_table(activities: &[TrackedActivity], env: &Environment) -> Result<()> {
-    let mut col_date: Vec<Rc<str>> = Vec::new();
-    let mut col_start: Vec<Rc<str>> = Vec::new();
-    let mut col_end: Vec<Rc<str>> = Vec::new();
-    let mut col_hours: Vec<Rc<str>> = Vec::new();
-    let mut col_name: Vec<Rc<str>> = Vec::new();
-    let mut col_attendance: Vec<Rc<str>> = Vec::new();
-    let mut col_wbs: Vec<Rc<str>> = Vec::new();
-    let mut col_description: Vec<Rc<str>> = Vec::new();
-    let none_value: Rc<str> = Rc::from(NONE_PRINT_VALUE);
+fn print_activity_table(
+    activities: &[TrackedActivity],
+    config: &Config,
+    now: DateTime<Local>,
+    env: &Environment,
+) -> Result<()> {
+    let mut col_date: Vec<String> = Vec::new();
+    let mut col_start: Vec<String> = Vec::new();
+    let mut col_end: Vec<String> = Vec::new();
+    let mut col_hours: Vec<String> = Vec::new();
+    let mut col_name: Vec<String> = Vec::new();
+    let mut col_attendance: Vec<String> = Vec::new();
+    let mut col_wbs: Vec<String> = Vec::new();
+    let mut col_description: Vec<String> = Vec::new();
 
     for activity in activities {
         let start = activity.start_time();
-        let time_to = activity.end_time().copied().unwrap_or(Local::now());
+        let time_to = activity.end_time().unwrap_or(now);
         let hours = (time_to - start).as_seconds_f64() / 3600.0;
 
-        let config = get_config(env)?;
         let attendance = activity.attendance();
-        let attendance_str = match config.attendance_types.get(attendance) {
-            Some(hint) if !hint.trim().is_empty() => format!("{attendance} ({hint})"),
-            _ => attendance.to_string(),
-        };
+        let attendance_str = config.attendance_label(attendance);
 
-        col_date.push(start.format("%Y-%m-%d").to_string().into());
-        col_start.push(start.format("%H:%M:%S").to_string().into());
+        col_date.push(start.format("%Y-%m-%d").to_string());
+        col_start.push(start.format("%H:%M:%S").to_string());
         col_end.push(match activity.end_time() {
-            Some(t) => t.format("%H:%M:%S").to_string().into(),
-            None => none_value.clone(),
+            Some(t) => t.format("%H:%M:%S").to_string(),
+            None => NONE_PRINT_VALUE.to_string(),
         });
-        col_hours.push(format!("{hours:.2}").into());
+        col_hours.push(format!("{hours:.2}"));
         col_name.push(activity.name().into());
-        col_attendance.push(attendance_str.into());
+        col_attendance.push(attendance_str);
         col_wbs.push(activity.wbs().into());
         col_description.push(match activity.description() {
-            "" => none_value.clone(),
-            s => s.into(),
+            "" => NONE_PRINT_VALUE.to_string(),
+            s => s.to_string(),
         });
     }
 
@@ -281,7 +266,8 @@ fn print_collapsed(
             println!("{collapsed}");
         }
     } else {
-        print_collapsed_activity_table(collapsed_activities, single, env)?
+        let config = Config::load(env)?;
+        print_collapsed_activity_table(collapsed_activities, single, &config, env)?
     }
 
     Ok(())
@@ -290,33 +276,29 @@ fn print_collapsed(
 fn print_collapsed_activity_table(
     collapsed_activities: &[CollapsedActivity],
     single: bool,
+    config: &Config,
     env: &Environment,
 ) -> Result<()> {
-    let mut col_date: Vec<Rc<str>> = Vec::new();
-    let mut col_hours: Vec<Rc<str>> = Vec::new();
-    let mut col_attendance: Vec<Rc<str>> = Vec::new();
-    let mut col_wbs: Vec<Rc<str>> = Vec::new();
-    let mut col_description: Vec<Rc<str>> = Vec::new();
-    let none_value: Rc<str> = Rc::from(NONE_PRINT_VALUE);
+    let mut col_date: Vec<String> = Vec::new();
+    let mut col_hours: Vec<String> = Vec::new();
+    let mut col_attendance: Vec<String> = Vec::new();
+    let mut col_wbs: Vec<String> = Vec::new();
+    let mut col_description: Vec<String> = Vec::new();
 
     for collapsed in collapsed_activities {
         let start = collapsed.start_time();
         let hours = collapsed.duration().as_seconds_f64() / 3600.0;
 
-        let config = get_config(env)?;
         let attendance = collapsed.attendance();
-        let attendance_str = match config.attendance_types.get(attendance) {
-            Some(hint) if !hint.trim().is_empty() => format!("{attendance} ({hint})"),
-            _ => attendance.to_string(),
-        };
+        let attendance_str = config.attendance_label(attendance);
 
-        col_date.push(start.format("%Y-%m-%d").to_string().into());
-        col_hours.push(format!("{hours:.2}").into());
-        col_attendance.push(attendance_str.into());
+        col_date.push(start.format("%Y-%m-%d").to_string());
+        col_hours.push(format!("{hours:.2}"));
+        col_attendance.push(attendance_str);
         col_wbs.push(collapsed.wbs().into());
         col_description.push(match collapsed.description() {
-            "" => none_value.clone(),
-            s => s.into(),
+            "" => NONE_PRINT_VALUE.to_string(),
+            s => s.to_string(),
         });
     }
 
@@ -350,6 +332,7 @@ fn print_attendance(
     ranges: &[AttendanceRange],
     machine_readable: bool,
     single: bool,
+    now: DateTime<Local>,
     env: &Environment,
 ) -> Result<()> {
     if ranges.is_empty() {
@@ -359,7 +342,8 @@ fn print_attendance(
             println!("{range}");
         }
     } else {
-        print_attendance_table(ranges, single, env)?;
+        let config = Config::load(env)?;
+        print_attendance_table(ranges, single, &config, now, env)?;
     }
 
     Ok(())
@@ -368,26 +352,27 @@ fn print_attendance(
 fn print_attendance_table(
     ranges: &[AttendanceRange],
     single: bool,
+    config: &Config,
+    now: DateTime<Local>,
     env: &Environment,
 ) -> Result<()> {
-    let mut col_date: Vec<Rc<str>> = Vec::new();
-    let mut col_start: Vec<Rc<str>> = Vec::new();
-    let mut col_end: Vec<Rc<str>> = Vec::new();
-    let mut col_hours: Vec<Rc<str>> = Vec::new();
-    let mut col_hours_adjusted: Vec<Rc<str>> = Vec::new();
-    let mut col_attendance: Vec<Rc<str>> = Vec::new();
-    let none_value: Rc<str> = NONE_PRINT_VALUE.into();
+    let mut col_date: Vec<String> = Vec::new();
+    let mut col_start: Vec<String> = Vec::new();
+    let mut col_end: Vec<String> = Vec::new();
+    let mut col_hours: Vec<String> = Vec::new();
+    let mut col_hours_adjusted: Vec<String> = Vec::new();
+    let mut col_attendance: Vec<String> = Vec::new();
 
     for range in ranges {
         let quantum = TimeDelta::minutes(15);
         let start = range.start_time().duration_trunc(quantum).unwrap();
-        let end_value = range.end_time().copied().unwrap_or(Local::now());
+        let end_value = range.end_time().unwrap_or(now);
         let end = end_value.duration_round_up(quantum).unwrap();
         let end_str = range
             .end_time()
             .map(|t| t.duration_round_up(quantum).unwrap())
-            .map(|t| t.format("%H:%M").to_string().into())
-            .unwrap_or(none_value.clone());
+            .map(|t| t.format("%H:%M").to_string())
+            .unwrap_or_else(|| NONE_PRINT_VALUE.to_string());
 
         let delta = end - start;
         let delta_adjusted = match delta {
@@ -398,19 +383,15 @@ fn print_attendance_table(
         let hours = delta.as_seconds_f64() / 3600.0;
         let hours_adjusted = delta_adjusted.as_seconds_f64() / 3600.0;
 
-        let config = get_config(env)?;
         let attendance = range.attendance();
-        let attendance_str = match config.attendance_types.get(attendance) {
-            Some(hint) if !hint.trim().is_empty() => format!("{attendance} ({hint})"),
-            _ => attendance.to_string(),
-        };
+        let attendance_str = config.attendance_label(attendance);
 
-        col_date.push(start.format("%Y-%m-%d").to_string().into());
-        col_start.push(start.format("%H:%M").to_string().into());
+        col_date.push(start.format("%Y-%m-%d").to_string());
+        col_start.push(start.format("%H:%M").to_string());
         col_end.push(end_str);
-        col_hours.push(format!("{hours:.2}").into());
-        col_hours_adjusted.push(format!("{hours_adjusted:.2}").into());
-        col_attendance.push(attendance_str.into());
+        col_hours.push(format!("{hours:.2}"));
+        col_hours_adjusted.push(format!("{hours_adjusted:.2}"));
+        col_attendance.push(attendance_str);
     }
 
     if single {
@@ -441,10 +422,14 @@ fn print_attendance_table(
 // Time //
 // ---- //
 
-fn show_activity_time(activities: &[TrackedActivity], machine_readable: bool) {
+fn show_activity_time(
+    activities: &[TrackedActivity],
+    machine_readable: bool,
+    now: DateTime<Local>,
+) {
     let sum: TimeDelta = activities
         .iter()
-        .map(|a| a.end_time().copied().unwrap_or(Local::now()) - a.start_time())
+        .map(|a| a.end_time().unwrap_or(now) - a.start_time())
         .sum();
     if machine_readable {
         println!("{:.2}", sum.as_seconds_f64());

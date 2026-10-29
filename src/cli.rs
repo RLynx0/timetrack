@@ -1,5 +1,4 @@
-use clap::ValueEnum;
-pub use clap::{Parser, Subcommand};
+use clap::{Parser, Subcommand, ValueEnum};
 
 use crate::{
     activity_range::ActivityRange, environment::Environment, trackable::BUILTIN_ACTIVITY_IDLE_NAME,
@@ -134,6 +133,17 @@ pub enum ShowMode {
     Attendance,
     /// Show the total tracked time, derived from selected activities
     Time,
+}
+
+impl ShowMode {
+    pub fn title(&self) -> &'static str {
+        match self {
+            Self::Entries => "Entries",
+            Self::Collapsed => "Collapsed",
+            Self::Attendance => "Attendance",
+            Self::Time => "Time",
+        }
+    }
 }
 
 /// Open a timetrack work file in an editor

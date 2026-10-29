@@ -50,22 +50,20 @@ fn parse_no_color(value: &str) -> std::result::Result<bool, Infallible> {
 
 impl Environment {
     pub fn config_home(&self) -> Result<PathBuf> {
-        if let Some(path) = &self.config_home {
-            return Ok(path.clone());
-        }
-        let base = env::var("XDG_CONFIG_HOME")
-            .map(PathBuf::from)
-            .or_else(|_| env::var("HOME").map(|home| PathBuf::from(home).join(".config")))?;
-        Ok(base.join("timetrack"))
+        Self::xdg_dir(self.config_home.as_ref(), "XDG_CONFIG_HOME", ".config")
     }
 
     pub fn data_home(&self) -> Result<PathBuf> {
-        if let Some(path) = &self.data_home {
+        Self::xdg_dir(self.data_home.as_ref(), "XDG_DATA_HOME", ".local/share")
+    }
+
+    fn xdg_dir(override_path: Option<&PathBuf>, variable: &str, fallback: &str) -> Result<PathBuf> {
+        if let Some(path) = override_path {
             return Ok(path.clone());
         }
-        let base = env::var("XDG_DATA_HOME")
+        let base = env::var(variable)
             .map(PathBuf::from)
-            .or_else(|_| env::var("HOME").map(|home| PathBuf::from(home).join(".local/share")))?;
+            .or_else(|_| env::var("HOME").map(|home| PathBuf::from(home).join(fallback)))?;
         Ok(base.join("timetrack"))
     }
 

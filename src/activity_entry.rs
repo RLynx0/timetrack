@@ -19,7 +19,7 @@ impl Display for ParseEntryError {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             ParseEntryError::MissingTime => write!(f, "missing time stamp"),
-            ParseEntryError::MissingName => write!(f, "missing activitiy name"),
+            ParseEntryError::MissingName => write!(f, "missing activity name"),
             ParseEntryError::MissingAttendance => write!(f, "missing attendance type"),
             ParseEntryError::MissingWbs => write!(f, "missing wbs"),
             ParseEntryError::ParseDatetime(parse_error) => {
@@ -37,7 +37,7 @@ impl From<chrono::format::ParseError> for ParseEntryError {
 #[derive(Debug, Clone)]
 pub struct TrackedActivity {
     pub start_entry: ActivityStart,
-    pub end: Option<DateTime<Local>>,
+    end: Option<DateTime<Local>>,
 }
 impl TrackedActivity {
     pub fn new(start_entry: ActivityStart, end: Option<DateTime<Local>>) -> Self {
@@ -64,8 +64,8 @@ impl TrackedActivity {
         now: DateTime<Local>,
     ) -> Option<Self> {
         let from = start
-            .map(|s| s.max(*self.start_time()))
-            .unwrap_or(*self.start_time());
+            .map(|s| s.max(self.start_time()))
+            .unwrap_or_else(|| self.start_time());
         let clipped_end = self
             .end
             .map(|activity_end| activity_end.min(end))
@@ -88,11 +88,11 @@ impl TrackedActivity {
         }
     }
 
-    pub fn start_time(&self) -> &DateTime<Local> {
+    pub fn start_time(&self) -> DateTime<Local> {
         self.start_entry.time_stamp()
     }
-    pub fn end_time(&self) -> Option<&DateTime<Local>> {
-        self.end.as_ref()
+    pub fn end_time(&self) -> Option<DateTime<Local>> {
+        self.end
     }
     pub fn name(&self) -> &str {
         self.start_entry.name()
@@ -116,7 +116,10 @@ impl Display for TrackedActivity {
             description: descr,
             wbs,
         } = &self.start_entry;
-        let end = self.end_time().map(|s| s.to_string()).unwrap_or_default();
+        let end = self
+            .end_time()
+            .map(|time| time.to_string())
+            .unwrap_or_default();
         write!(f, "{start}\t{end}\t{name}\t{attendance}\t{wbs}\t{descr}")
     }
 }
@@ -161,20 +164,20 @@ impl ActivityEntry {
         wbs: &str,
         description: &str,
     ) -> Self {
-        ActivityEntry::Start(ActivityStart {
-            time_stamp: Local::now(),
-            activity_name: Rc::from(activity_name),
-            attendance_type: Rc::from(attendance_type),
-            description: Rc::from(description),
-            wbs: Rc::from(wbs),
-        })
+        ActivityEntry::Start(ActivityStart::new(
+            Local::now(),
+            activity_name,
+            attendance_type,
+            wbs,
+            description,
+        ))
     }
     pub fn new_end() -> Self {
         ActivityEntry::End(ActivityEnd {
             time_stamp: Local::now(),
         })
     }
-    pub fn time_stamp(&self) -> &DateTime<Local> {
+    pub fn time_stamp(&self) -> DateTime<Local> {
         match self {
             ActivityEntry::Start(start) => start.time_stamp(),
             ActivityEntry::End(end) => end.time_stamp(),
@@ -203,13 +206,13 @@ impl FromStr for ActivityEntry {
         let wbs = fields.next().ok_or(ParseEntryError::MissingWbs)?;
         let description = fields.next().unwrap_or_default();
 
-        Ok(ActivityEntry::Start(ActivityStart {
+        Ok(ActivityEntry::Start(ActivityStart::new(
             time_stamp,
-            activity_name: Rc::from(activity_name),
-            attendance_type: Rc::from(attendance_type),
-            description: Rc::from(description),
-            wbs: Rc::from(wbs),
-        }))
+            activity_name,
+            attendance_type,
+            wbs,
+            description,
+        )))
     }
 }
 impl Display for ActivityEntry {
@@ -237,8 +240,8 @@ pub struct ActivityEnd {
     time_stamp: DateTime<Local>,
 }
 impl ActivityEnd {
-    pub fn time_stamp(&self) -> &DateTime<Local> {
-        &self.time_stamp
+    pub fn time_stamp(&self) -> DateTime<Local> {
+        self.time_stamp
     }
 }
 
@@ -251,8 +254,24 @@ pub struct ActivityStart {
     wbs: Rc<str>,
 }
 impl ActivityStart {
-    pub fn time_stamp(&self) -> &DateTime<Local> {
-        &self.time_stamp
+    fn new(
+        time_stamp: DateTime<Local>,
+        activity_name: &str,
+        attendance_type: &str,
+        wbs: &str,
+        description: &str,
+    ) -> Self {
+        Self {
+            time_stamp,
+            activity_name: Rc::from(activity_name),
+            attendance_type: Rc::from(attendance_type),
+            description: Rc::from(description),
+            wbs: Rc::from(wbs),
+        }
+    }
+
+    pub fn time_stamp(&self) -> DateTime<Local> {
+        self.time_stamp
     }
     pub fn name(&self) -> &str {
         &self.activity_name

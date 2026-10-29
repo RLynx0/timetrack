@@ -146,7 +146,8 @@ struct TableCapOptions {
     hu: char,
 }
 impl TableCharOptions {
-    pub fn _sharp() -> Self {
+    #[cfg(test)]
+    pub fn sharp() -> Self {
         TableCharOptions {
             caps: Some(TableCapOptions {
                 dr: '┌',
@@ -262,14 +263,8 @@ where
             widths = fit_widths(&widths, limit);
         }
 
-        // Conditionally print top table cap
         if let Some(co) = &copt.caps {
-            for (i, w) in widths.iter().enumerate() {
-                let v_char = if i == 0 { co.dr } else { co.hd };
-                let h_line = &copt.h.to_string().repeat(*w + 2);
-                write!(output, "{v_char}{h_line}")?;
-            }
-            writeln!(output, "{}", co.dl)?;
+            write_rule(output, &widths, copt.h, co.dr, co.hd, co.dl)?;
         }
 
         // Print table headers
@@ -286,13 +281,7 @@ where
         }
         writeln!(output)?;
 
-        // Print header separator
-        for (i, w) in widths.iter().enumerate() {
-            let v_char = if i == 0 { copt.vr } else { copt.hv };
-            let h_line = &copt.h.to_string().repeat(*w + 2);
-            write!(output, "{v_char}{h_line}")?;
-        }
-        writeln!(output, "{}", copt.vl)?;
+        write_rule(output, &widths, copt.h, copt.vr, copt.hv, copt.vl)?;
 
         // Print table rows
         let complete_rows = columns.iter().map(|vs| vs.len()).max().unwrap_or_default();
@@ -305,17 +294,30 @@ where
             writeln!(output, "{}", copt.v)?;
         }
 
-        // Conditionally print bottom table cap
         if let Some(co) = &copt.caps {
-            for (i, w) in widths.iter().enumerate() {
-                let v_char = if i == 0 { co.ur } else { co.hu };
-                let h_line = &copt.h.to_string().repeat(*w + 2);
-                write!(output, "{v_char}{h_line}")?;
-            }
-            writeln!(output, "{}", co.ul)?;
+            write_rule(output, &widths, copt.h, co.ur, co.hu, co.ul)?;
         }
         Ok(())
     }
+}
+
+fn write_rule(
+    output: &mut impl Write,
+    widths: &[usize],
+    horizontal: char,
+    left: char,
+    middle: char,
+    right: char,
+) -> io::Result<()> {
+    for (index, width) in widths.iter().enumerate() {
+        let junction = if index == 0 { left } else { middle };
+        write!(
+            output,
+            "{junction}{}",
+            horizontal.to_string().repeat(width + 2)
+        )?;
+    }
+    writeln!(output, "{right}")
 }
 
 #[derive(Clone, Debug)]

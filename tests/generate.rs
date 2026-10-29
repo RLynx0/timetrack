@@ -1,23 +1,14 @@
-use std::{
-    fs,
-    path::PathBuf,
-    process::{Command, Output},
-    time::{SystemTime, UNIX_EPOCH},
-};
+use std::{fs, process::Output};
 
 use chrono::{DateTime, TimeDelta, Utc};
 
-struct Fixture(PathBuf);
+mod common;
+
+struct Fixture(common::Fixture);
 
 impl Fixture {
     fn new(entries: &str, range: Option<&str>) -> Self {
-        let id = SystemTime::now()
-            .duration_since(UNIX_EPOCH)
-            .unwrap()
-            .as_nanos();
-        let path =
-            std::env::temp_dir().join(format!("timetrack-generate-{}-{id}", std::process::id()));
-        fs::create_dir(&path).unwrap();
+        let fixture = common::Fixture::new("timetrack-generate");
         let mut config: toml::Value =
             toml::from_str(include_str!("../assets/default_config.toml")).unwrap();
         let generate = config["generate"].as_table_mut().unwrap();
@@ -33,22 +24,17 @@ impl Fixture {
             "file_name_format".into(),
             "${year}-${month}-${day}.txt".into(),
         );
-        fs::write(path.join("config.toml"), toml::to_string(&config).unwrap()).unwrap();
-        fs::write(path.join("entries"), entries).unwrap();
-        Self(path)
+        fs::write(
+            fixture.path.join("config.toml"),
+            toml::to_string(&config).unwrap(),
+        )
+        .unwrap();
+        fs::write(fixture.path.join("entries"), entries).unwrap();
+        Self(fixture)
     }
 
     fn run(&self, args: &[&str]) -> Output {
-        Command::new(env!("CARGO_BIN_EXE_timetrack"))
-            .args(args)
-            .env("TIMETRACK_HOME", &self.0)
-            .env("TIMETRACK_DATA_HOME", &self.0)
-            .env("TZ", "UTC")
-            .env("NO_COLOR", "1")
-            .env_remove("FORCE_COLOR")
-            .env_remove("MAX_TABLE_WIDTH")
-            .output()
-            .unwrap()
+        self.0.command().args(args).output().unwrap()
     }
 
     fn success(&self, args: &[&str]) -> String {
@@ -70,12 +56,6 @@ impl Fixture {
             .filter(|line| !line.is_empty())
             .map(str::to_owned)
             .collect()
-    }
-}
-
-impl Drop for Fixture {
-    fn drop(&mut self) {
-        fs::remove_dir_all(&self.0).unwrap();
     }
 }
 
@@ -124,7 +104,7 @@ fn counts_select_whole_collapsed_groups_and_include_active_result() {
         .unwrap()
         .and_utc();
     fs::write(
-        fixture.0.join("entries"),
+        fixture.0.path.join("entries"),
         entries + &start(ongoing, "active"),
     )
     .unwrap();
@@ -167,18 +147,54 @@ fn missing_config_range_defaults_to_current_month() {
 fn file_name_uses_range_start_then_first_row_then_today() {
     let entries = completed("2025-01-15T09:00:00Z", "2025-01-15T10:00:00Z", "a");
     let fixture = Fixture::new(&entries, Some("2025-01"));
-    let directory = fixture.0.to_str().unwrap();
+    let directory = fixture.0.path.to_str().unwrap();
     fixture.success(&["generate", "-f", directory]);
-    let contents = fs::read_to_string(fixture.0.join("2025-01-01.txt")).unwrap();
+    let contents = fs::read_to_string(fixture.0.path.join("2025-01-01.txt")).unwrap();
     assert!(contents.contains("15/01/2025\ta\t0800\t1.00\ta"));
     fixture.success(&["generate", "-f", directory, "-r", ".."]);
-    assert!(fixture.0.join("2025-01-15.txt").exists());
+    assert!(fixture.0.path.join("2025-01-15.txt").exists());
     fixture.success(&["generate", "-f", directory, "-r", "2024-12"]);
-    assert!(fixture.0.join("2024-12-01.txt").exists());
+    assert!(fixture.0.path.join("2024-12-01.txt").exists());
 
-    fs::write(fixture.0.join("entries"), "").unwrap();
+    fs::write(fixture.0.path.join("entries"), "").unwrap();
     let today_before = Utc::now().format("%Y-%m-%d.txt").to_string();
     fixture.success(&["generate", "-f", directory, "-r", ".."]);
     let today_after = Utc::now().format("%Y-%m-%d.txt").to_string();
-    assert!(fixture.0.join(today_before).exists() || fixture.0.join(today_after).exists());
+    assert!(
+        fixture.0.path.join(today_before).exists() || fixture.0.path.join(today_after).exists()
+    );
+}
+
+#[test]
+fn generated_output_uses_crlf_for_stdout_and_files() {
+    let entries = completed("2025-01-15T09:00:00Z", "2025-01-15T10:00:00Z", "a");
+    let fixture = Fixture::new(&entries, Some("2025-01"));
+    let output = fixture.success(&["generate", "--stdout", "--range", "2025-01"]);
+    assert!(output.as_bytes().ends_with(b"\r\n"));
+    assert!(
+        output
+            .as_bytes()
+            .split_inclusive(|byte| *byte == b'\n')
+            .all(|line| line.ends_with(b"\r\n"))
+    );
+
+    let output_path = fixture.0.path.join("generated.txt");
+    fixture.success(&[
+        "generate",
+        "--file-path",
+        output_path.to_str().unwrap(),
+        "--range",
+        "2025-01",
+    ]);
+    let file = fs::read(output_path).unwrap();
+    assert!(file.ends_with(b"\r\n"));
+    assert!(
+        file.split_inclusive(|byte| *byte == b'\n')
+            .all(|line| line.ends_with(b"\r\n"))
+    );
+
+    let empty = Fixture::new("", Some("2025-01"));
+    let output = empty.success(&["generate", "--stdout", "--range", "2025-01"]);
+    assert!(output.ends_with("\r\n"));
+    assert!(!output.contains('\n') || output.matches('\n').count() == 1);
 }

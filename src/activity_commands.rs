@@ -10,14 +10,13 @@ use std::{
 use color_eyre::{
     Section,
     eyre::{Context, Result, format_err},
-    owo_colors::OwoColorize,
 };
-use owo_colors::Stream;
 
 use crate::{
     NONE_PRINT_VALUE, cli,
     environment::Environment,
     files, print_smart_list, print_smart_table,
+    style::{green, red},
     trackable::{
         Activity, ActivityCategory, ActivityItemRef, ActivityLeaf, BUILTIN_ACTIVITY_IDLE_NAME,
         LookupError, PrintableActivityItem,
@@ -40,10 +39,7 @@ pub fn set_activity(set_opts: &cli::SetActivity, env: &Environment) -> Result<()
         SetOutcome::Added => "Added",
         SetOutcome::Updated => "Updated",
     };
-    println!(
-        "{action} activity '{}'",
-        name.if_supports_color(Stream::Stdout, |n| n.green())
-    );
+    println!("{action} activity '{}'", green(&name));
     Ok(())
 }
 
@@ -54,9 +50,8 @@ pub fn move_activity(move_opts: &cli::MoveActivity, env: &Environment) -> Result
     write_stored_activities(&activities, env)?;
     println!(
         "Moved '{}' to '{}'",
-        from.join("/")
-            .if_supports_color(Stream::Stdout, |n| n.red()),
-        destination.if_supports_color(Stream::Stdout, |n| n.green())
+        red(&from.join("/")),
+        green(&destination)
     );
     Ok(())
 }
@@ -67,11 +62,7 @@ pub fn remove_activity(remove_opts: &cli::RemoveActivity, env: &Environment) -> 
         apply_remove(get_stored_activities(env)?, &path, remove_opts.recursive)?;
     write_stored_activities(&activities, env)?;
     let noun = if count == 1 { "activity" } else { "activities" };
-    println!(
-        "Removed {count} {noun} at '{}'",
-        path.join("/")
-            .if_supports_color(Stream::Stdout, |n| n.red())
-    );
+    println!("Removed {count} {noun} at '{}'", red(&path.join("/")));
     Ok(())
 }
 
@@ -91,6 +82,14 @@ fn check_mutable_path(path: &[&str]) -> Result<()> {
     Ok(())
 }
 
+fn hierarchy_with_builtin_idle(activities: &[Activity]) -> ActivityCategory {
+    ActivityCategory::from(activities.iter().cloned().chain([Activity::builtin_idle()]))
+}
+
+fn is_missing(error: &LookupError) -> bool {
+    matches!(error, LookupError::NoSuchItem { .. })
+}
+
 #[derive(Debug, PartialEq)]
 enum SetOutcome {
     Added,
@@ -104,8 +103,7 @@ fn apply_set(
 ) -> Result<(Vec<Activity>, SetOutcome)> {
     let path = activity.path_segments();
     check_mutable_path(&path)?;
-    let hierarchy =
-        ActivityCategory::from(activities.iter().cloned().chain([Activity::builtin_idle()]));
+    let hierarchy = hierarchy_with_builtin_idle(&activities);
     let outcome = match hierarchy.get_item_at(&path) {
         Ok(ActivityItemRef::Category(_)) => {
             return Err(format_err!("{} is an activity category", path.join("/")));
@@ -122,7 +120,7 @@ fn apply_set(
             }
             SetOutcome::Updated
         }
-        Err(LookupError::NoSuchItem { .. }) => {
+        Err(error) if is_missing(&error) => {
             activities.push(activity);
             SetOutcome::Added
         }
@@ -137,8 +135,7 @@ fn apply_remove(
     recursive: bool,
 ) -> Result<(Vec<Activity>, usize)> {
     check_mutable_path(path)?;
-    let hierarchy =
-        ActivityCategory::from(activities.iter().cloned().chain([Activity::builtin_idle()]));
+    let hierarchy = hierarchy_with_builtin_idle(&activities);
     if matches!(hierarchy.get_item_at(path)?, ActivityItemRef::Category(_)) && !recursive {
         return Err(format_err!("{} is an activity category", path.join("/")))
             .with_note(|| "use --recursive to remove a category and all its activities");
@@ -155,8 +152,7 @@ fn apply_move(
     to: &[&str],
 ) -> Result<(Vec<Activity>, String)> {
     check_mutable_path(from)?;
-    let hierarchy =
-        ActivityCategory::from(activities.iter().cloned().chain([Activity::builtin_idle()]));
+    let hierarchy = hierarchy_with_builtin_idle(&activities);
     hierarchy.get_item_at(from)?;
     let mut destination = to.to_vec();
     match hierarchy.get_item_at(to) {
@@ -164,7 +160,7 @@ fn apply_move(
         Ok(ActivityItemRef::Leaf(_)) => {
             return Err(format_err!("activity '{}' already exists", to.join("/")));
         }
-        Err(LookupError::NoSuchItem { .. }) => {}
+        Err(error) if is_missing(&error) => {}
         Err(error) => return Err(error.into()),
     }
     check_mutable_path(&destination)?;
@@ -180,7 +176,7 @@ fn apply_move(
                 destination.join("/")
             ));
         }
-        Err(LookupError::NoSuchItem { .. }) => {}
+        Err(error) if is_missing(&error) => {}
         Err(error) => return Err(error.into()),
     }
     let activities = activities
@@ -244,29 +240,19 @@ fn print_hierarchy(
             print_activities(printable, machine_readable, env);
         }
         HierarchyListMode::Collapsed => {
-            let mut branches: Vec<_> = hierarchy.branches.iter().collect();
-            let mut leafs: Vec<_> = hierarchy.leafs.values().collect();
-            branches.sort_unstable_by(|(a, _), (b, _)| a.cmp(b));
-            leafs.sort_unstable_by(|a, b| a.name().cmp(b.name()));
+            let branches = hierarchy.branches.iter();
+            let leafs = hierarchy.leafs.values();
             let printable = branches
-                .iter()
                 .map(|(name, category)| collapsed_category_item(name, category))
-                .chain(
-                    leafs
-                        .iter()
-                        .map(|leaf| PrintableActivityItem::ActivityLeaf(leaf)),
-                );
+                .chain(leafs.map(PrintableActivityItem::ActivityLeaf));
             print_activities(printable, machine_readable, env);
         }
         HierarchyListMode::Flat => {
-            let mut branches = Vec::from_iter(hierarchy.branches.keys());
-            let mut leafs = Vec::from_iter(hierarchy.leafs.values());
-            leafs.sort_unstable_by(|a, b| a.name().cmp(b.name()));
-            branches.sort_unstable();
+            let branches = hierarchy.branches.keys();
+            let leafs = hierarchy.leafs.values();
             let printable = branches
-                .iter()
                 .map(|s| PrintableActivityItem::CategoryName(s))
-                .chain(leafs.iter().map(|s| PrintableActivityItem::ActivityLeaf(s)));
+                .chain(leafs.map(PrintableActivityItem::ActivityLeaf));
             print_activities(printable, machine_readable, env);
         }
     }

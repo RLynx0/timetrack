@@ -9,19 +9,13 @@ const ACTIVITY_FILE_NAME: &str = "activities";
 const ENTRY_FILE_NAME: &str = "entries";
 
 pub fn get_entry_file_path(env: &Environment) -> Result<PathBuf> {
-    let mut path = env.data_home()?;
-    path.push(ENTRY_FILE_NAME);
-    Ok(path)
+    Ok(env.data_home()?.join(ENTRY_FILE_NAME))
 }
 
 pub fn get_activity_file_path(env: &Environment) -> Result<PathBuf> {
-    let mut path = env.config_home()?;
-    path.push(ACTIVITY_FILE_NAME);
-    Ok(path)
+    Ok(env.config_home()?.join(ACTIVITY_FILE_NAME))
 }
 
 pub fn get_main_config_path(env: &Environment) -> Result<PathBuf> {
-    let mut path = env.config_home()?;
-    path.push(DEFAULT_CONFIG_FILENAME);
-    Ok(path)
+    Ok(env.config_home()?.join(DEFAULT_CONFIG_FILENAME))
 }

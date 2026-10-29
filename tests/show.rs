@@ -1,34 +1,29 @@
 use std::{
     fs,
-    path::PathBuf,
     process::{Command, Output},
-    time::{SystemTime, UNIX_EPOCH},
 };
 
 use chrono::{DateTime, Datelike, Local, NaiveDate, TimeDelta, Utc};
 
-struct Fixture(PathBuf);
+mod common;
+
+struct Fixture(common::Fixture);
 
 impl Fixture {
     fn new(entries: &str) -> Self {
-        let id = SystemTime::now()
-            .duration_since(UNIX_EPOCH)
-            .unwrap()
-            .as_nanos();
-        let path = std::env::temp_dir().join(format!("timetrack-show-{}-{id}", std::process::id()));
-        fs::create_dir(&path).unwrap();
+        let fixture = common::Fixture::new("timetrack-show");
         fs::write(
-            path.join("config.toml"),
+            fixture.path.join("config.toml"),
             include_str!("../assets/default_config.toml"),
         )
         .unwrap();
-        let fixture = Self(path);
+        let fixture = Self(fixture);
         fixture.write(entries);
         fixture
     }
 
     fn write(&self, entries: &str) {
-        fs::write(self.0.join("entries"), entries).unwrap();
+        fs::write(self.0.path.join("entries"), entries).unwrap();
     }
 
     fn command(&self, args: &[&str]) -> Command {
@@ -38,15 +33,7 @@ impl Fixture {
     }
 
     fn root_command(&self) -> Command {
-        let mut command = Command::new(env!("CARGO_BIN_EXE_timetrack"));
-        command
-            .env("TIMETRACK_HOME", &self.0)
-            .env("TIMETRACK_DATA_HOME", &self.0)
-            .env("TZ", "UTC")
-            .env("NO_COLOR", "1")
-            .env_remove("FORCE_COLOR")
-            .env_remove("MAX_TABLE_WIDTH");
-        command
+        self.0.command()
     }
 
     fn run(&self, args: &[&str]) -> Output {
@@ -64,14 +51,36 @@ impl Fixture {
     }
 }
 
-impl Drop for Fixture {
-    fn drop(&mut self) {
-        fs::remove_dir_all(&self.0).unwrap();
-    }
-}
-
 fn start(time: DateTime<Utc>, key: &str, attendance: &str) -> String {
     format!("{time}\t{key}\t{attendance}\t{key}\t{key}\n")
+}
+
+#[test]
+fn end_verbose_uses_colon_separated_time() {
+    let active = start(Utc::now() - TimeDelta::hours(1), "active", "0800");
+    let fixture = Fixture::new(&active);
+    let output = fixture
+        .root_command()
+        .args(["end", "--verbose"])
+        .output()
+        .unwrap();
+    assert!(
+        output.status.success(),
+        "{}",
+        String::from_utf8_lossy(&output.stderr)
+    );
+    let output = String::from_utf8(output.stdout).unwrap();
+    let time = output
+        .lines()
+        .find(|line| line.contains("Time"))
+        .unwrap()
+        .split(": ")
+        .last()
+        .unwrap()
+        .trim();
+    assert_eq!(time.len(), 8);
+    assert_eq!(&time[2..3], ":");
+    assert_eq!(&time[5..6], ":");
 }
 
 fn end(time: DateTime<Utc>) -> String {
@@ -147,16 +156,16 @@ fn global_directory_flags_override_env_before_and_after_subcommands() {
     for before in [true, false] {
         let mut command = config.root_command();
         command
-            .env("TIMETRACK_HOME", config.0.join("missing"))
-            .env("TIMETRACK_DATA_HOME", data.0.join("missing"));
+            .env("TIMETRACK_HOME", config.0.path.join("missing"))
+            .env("TIMETRACK_DATA_HOME", data.0.path.join("missing"));
         if !before {
             command.args(["show", "-r", "1"]);
         }
         command
             .arg("--config-home")
-            .arg(&config.0)
+            .arg(&config.0.path)
             .arg("--data-home")
-            .arg(&data.0);
+            .arg(&data.0.path);
         if before {
             command.args(["show", "-r", "1"]);
         }
@@ -176,14 +185,14 @@ fn home_and_xdg_environment_preserve_directory_fallbacks() {
         + &end(time("2025-01-02T10:00:00Z"));
     let fixture = Fixture::new(&entries);
     for base in [".config", "config-base"] {
-        let path = fixture.0.join(base).join("timetrack");
+        let path = fixture.0.path.join(base).join("timetrack");
         fs::create_dir_all(&path).unwrap();
-        fs::copy(fixture.0.join("config.toml"), path.join("config.toml")).unwrap();
+        fs::copy(fixture.0.path.join("config.toml"), path.join("config.toml")).unwrap();
     }
     for base in [".local/share", "data-base"] {
-        let path = fixture.0.join(base).join("timetrack");
+        let path = fixture.0.path.join(base).join("timetrack");
         fs::create_dir_all(&path).unwrap();
-        fs::copy(fixture.0.join("entries"), path.join("entries")).unwrap();
+        fs::copy(fixture.0.path.join("entries"), path.join("entries")).unwrap();
     }
 
     for xdg in [false, true] {
@@ -191,11 +200,11 @@ fn home_and_xdg_environment_preserve_directory_fallbacks() {
         command.env_clear().env("TZ", "UTC").env("NO_COLOR", "1");
         if xdg {
             command
-                .env("HOME", fixture.0.join("missing"))
-                .env("XDG_CONFIG_HOME", fixture.0.join("config-base"))
-                .env("XDG_DATA_HOME", fixture.0.join("data-base"));
+                .env("HOME", fixture.0.path.join("missing"))
+                .env("XDG_CONFIG_HOME", fixture.0.path.join("config-base"))
+                .env("XDG_DATA_HOME", fixture.0.path.join("data-base"));
         } else {
-            command.env("HOME", &fixture.0);
+            command.env("HOME", &fixture.0.path);
         }
         let output = command.args(["show", "-r", "1"]).output().unwrap();
         assert!(
@@ -327,7 +336,7 @@ fn global_editor_flag_overrides_env_and_keeps_edit_short_flag() {
         );
         assert_eq!(
             String::from_utf8(output.stdout).unwrap().trim(),
-            fixture.0.join("config.toml").to_str().unwrap()
+            fixture.0.path.join("config.toml").to_str().unwrap()
         );
     }
 }
@@ -335,7 +344,7 @@ fn global_editor_flag_overrides_env_and_keeps_edit_short_flag() {
 #[test]
 fn nested_activity_commands_use_global_paths_and_table_width() {
     let fixture = Fixture::new("");
-    let config_home = fixture.0.join("selected-config");
+    let config_home = fixture.0.path.join("selected-config");
     let description = "A description longer than the configured table width";
     let output = fixture
         .root_command()
@@ -357,7 +366,7 @@ fn nested_activity_commands_use_global_paths_and_table_width() {
         String::from_utf8_lossy(&output.stderr)
     );
     assert!(config_home.join("activities").exists());
-    assert!(!fixture.0.join("activities").exists());
+    assert!(!fixture.0.path.join("activities").exists());
 
     let output = fixture
         .root_command()

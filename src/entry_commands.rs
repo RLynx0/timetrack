@@ -10,18 +10,18 @@ use chrono::{DateTime, Local};
 use color_eyre::{
     Section,
     eyre::{Result, format_err},
-    owo_colors::OwoColorize,
 };
-use owo_colors::Stream;
 use rev_lines::RawRevLines;
 
 use crate::{
     activity_commands::get_trackable_activity,
     activity_entry::{ActivityEntry, TrackedActivity},
     cli,
+    config::Config,
     environment::Environment,
     files::{self, get_activity_file_path, get_entry_file_path, get_main_config_path},
-    get_config, print_smart_list,
+    print_smart_list,
+    style::{green, red},
     trackable::sanitize_description,
 };
 
@@ -32,7 +32,7 @@ mod generate;
 mod show;
 
 pub fn start_activity(start_opts: &cli::Start, env: &Environment) -> Result<()> {
-    let config = &get_config(env)?;
+    let config = &Config::load(env)?;
     let activity_name: &str = &start_opts.activity;
     let activity = get_trackable_activity(activity_name, env)?;
     let wbs = activity.wbs();
@@ -61,22 +61,13 @@ pub fn start_activity(start_opts: &cli::Start, env: &Environment) -> Result<()> 
 
     if let Some(ActivityEntry::Start(last_start)) = last_entry.as_ref() {
         let last_name = last_start.name();
-        println!(
-            "Stopped tracking '{}'",
-            last_name.if_supports_color(Stream::Stdout, |n| n.red())
-        );
+        println!("Stopped tracking '{}'", red(last_name));
     }
-    println!(
-        "Started tracking '{}'",
-        activity_name.if_supports_color(Stream::Stdout, |n| n.green())
-    );
+    println!("Started tracking '{}'", green(activity_name));
 
     let timestamp = entry.time_stamp();
     if start_opts.verbose {
-        let attendance_str = match config.attendance_types.get(attendance) {
-            Some(hint) if !hint.trim().is_empty() => format!("{attendance} ({hint})"),
-            _ => attendance.to_string(),
-        };
+        let attendance_str = config.attendance_label(attendance);
         print_smart_list! {
             "Description" => description,
             "Attendance" => attendance_str,
@@ -96,15 +87,12 @@ pub fn end_activity(end_opts: &cli::End, env: &Environment) -> Result<()> {
             write_entry(&entry, env)?;
 
             let stopped = last_start.name();
-            println!(
-                "Stopped tracking '{}'",
-                stopped.if_supports_color(Stream::Stdout, |n| n.red())
-            );
+            println!("Stopped tracking '{}'", red(stopped));
             let timestamp = entry.time_stamp();
             if end_opts.verbose {
                 print_smart_list! {
                     "Date" => timestamp.format("%Y-%m-%d"),
-                    "Time" => timestamp.format("%H-%M-%S"),
+                    "Time" => timestamp.format("%H:%M:%S"),
                 }
             }
             Ok(())
@@ -117,9 +105,7 @@ pub fn end_activity(end_opts: &cli::End, env: &Environment) -> Result<()> {
 
 fn write_entry(entry: &ActivityEntry, env: &Environment) -> Result<()> {
     let path = files::get_entry_file_path(env)?;
-    if !fs::exists(&path)?
-        && let Some(p) = path.parent()
-    {
+    if let Some(p) = path.parent() {
         fs::create_dir_all(p)?
     }
 
@@ -155,20 +141,23 @@ fn open_editor_to_file(editor: &str, path: &Path) -> Result<()> {
 
 /// Fetch the last recorded activity entry
 fn get_last_entry(env: &Environment) -> Result<Option<ActivityEntry>> {
-    let path = &files::get_entry_file_path(env)?;
-    if !fs::exists(path)? {
-        return Ok(None);
+    read_entries_rev(env)?.next().transpose()
+}
+
+fn read_entries_rev(env: &Environment) -> Result<Box<dyn Iterator<Item = Result<ActivityEntry>>>> {
+    let path = files::get_entry_file_path(env)?;
+    if !fs::exists(&path)? {
+        return Ok(Box::new(std::iter::empty()));
     }
 
-    let file = fs::File::open(path)?;
-    for byte_res in RawRevLines::new(file) {
-        match entry_from_byte_result(byte_res)? {
-            Some(entry) => return Ok(Some(entry)),
-            None => continue,
+    let entries = RawRevLines::new(fs::File::open(path)?).filter_map(|line| {
+        match entry_from_byte_result(line) {
+            Ok(Some(entry)) => Some(Ok(entry)),
+            Ok(None) => None,
+            Err(error) => Some(Err(error)),
         }
-    }
-
-    Ok(None)
+    });
+    Ok(Box::new(entries))
 }
 
 fn get_last_activities_until<T>(
@@ -198,17 +187,11 @@ fn get_activities_between(
     now: DateTime<Local>,
     env: &Environment,
 ) -> Result<Vec<TrackedActivity>> {
-    let path = files::get_entry_file_path(env)?;
-    if !fs::exists(&path)? {
-        return Ok(Vec::new());
-    }
     let mut activities = Vec::new();
     let mut next_timestamp = None;
-    for line in RawRevLines::new(fs::File::open(path)?) {
-        let Some(entry) = entry_from_byte_result(line)? else {
-            continue;
-        };
-        let timestamp = *entry.time_stamp();
+    for entry in read_entries_rev(env)? {
+        let entry = entry?;
+        let timestamp = entry.time_stamp();
         if let ActivityEntry::Start(activity) = entry
             && let Some(clipped) =
                 TrackedActivity::new(activity, next_timestamp).clipped(start, end, now)
@@ -234,22 +217,14 @@ fn get_activities_between(
 /// Get the last `count` completed pieces plus the ongoing piece, in chronological order.
 /// Activities crossing midnight are split, except that zero selects the whole ongoing activity.
 fn get_last_n_activities(count: usize, env: &Environment) -> Result<Vec<TrackedActivity>> {
-    let path = &files::get_entry_file_path(env)?;
-    if !fs::exists(path)? {
-        return Ok(Vec::new());
-    }
-    let file = fs::File::open(path)?;
-    let rev_lines = RawRevLines::new(file);
     let now = Local::now();
     let mut activities = Vec::new();
     let mut completed_count = 0;
     let mut last_timestamp = None;
-    'entries: for line in rev_lines {
-        let Some(entry) = entry_from_byte_result(line)? else {
-            continue;
-        };
+    'entries: for entry in read_entries_rev(env)? {
+        let entry = entry?;
         let end_timestamp = last_timestamp.take();
-        last_timestamp = Some(*entry.time_stamp());
+        last_timestamp = Some(entry.time_stamp());
         if let ActivityEntry::Start(start) = entry {
             let activity = TrackedActivity::new(start, end_timestamp);
             if count == 0 {

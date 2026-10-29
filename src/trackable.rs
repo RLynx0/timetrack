@@ -1,5 +1,5 @@
 use std::{
-    collections::{HashMap, VecDeque},
+    collections::{BTreeMap, VecDeque},
     error,
     fmt::Display,
     rc::Rc,
@@ -201,12 +201,12 @@ impl Display for LookupError {
 
 #[derive(Debug, Clone)]
 pub struct ActivityCategory {
-    pub branches: HashMap<Rc<str>, Self>,
-    pub leafs: HashMap<Rc<str>, ActivityLeaf>,
+    pub branches: BTreeMap<Rc<str>, Self>,
+    pub leafs: BTreeMap<Rc<str>, ActivityLeaf>,
 }
 impl ActivityCategory {
     pub fn to_activities_sorted(&self) -> Vec<Activity> {
-        let map_branch = |(name, category): &(&Rc<str>, &ActivityCategory)| {
+        let map_branch = |(name, category): (&Rc<str>, &ActivityCategory)| {
             let name = Rc::clone(name);
             category
                 .to_activities_sorted()
@@ -217,13 +217,8 @@ impl ActivityCategory {
                 })
         };
 
-        let mut branches: Vec<_> = self.branches.iter().collect();
-        branches.sort_by(|(a, _), (b, _)| a.cmp(b));
-        let branches = branches.iter().flat_map(map_branch);
-
-        let mut leafs: Vec<_> = self.leafs.values().collect();
-        leafs.sort_by(|a, b| a.name().cmp(b.name()));
-        let leafs = leafs.iter().map(|&l| Activity::from(l.clone()));
+        let branches = self.branches.iter().flat_map(map_branch);
+        let leafs = self.leafs.values().map(|leaf| Activity::from(leaf.clone()));
 
         branches.chain(leafs).collect()
     }
@@ -258,8 +253,8 @@ where
     I: IntoIterator<Item = Activity>,
 {
     fn from(activities: I) -> Self {
-        let mut branches = HashMap::new();
-        let mut leafs = HashMap::new();
+        let mut branches = BTreeMap::new();
+        let mut leafs = BTreeMap::new();
         for mut activity in activities {
             if activity.path.is_empty() {
                 leafs.insert(activity.leaf.name.clone(), activity.leaf);

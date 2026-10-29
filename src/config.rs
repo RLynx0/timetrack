@@ -1,8 +1,14 @@
 use std::collections::HashMap;
+use std::fs;
 
+use color_eyre::{
+    Section,
+    eyre::{Context, Result},
+};
 use serde::{Deserialize, Serialize};
 
 use crate::format_string::FormatString;
+use crate::{environment::Environment, files};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Config {
@@ -26,6 +32,29 @@ pub struct GenerateConfig {
     pub delimiter: String,
     #[serde(default = "default_generate_range")]
     pub range: String,
+}
+
+impl Config {
+    pub fn load(env: &Environment) -> Result<Self> {
+        let config_path = files::get_main_config_path(env)?;
+        if fs::exists(&config_path)? {
+            let config_str = fs::read_to_string(config_path)?;
+            Ok(toml::from_str(&config_str)?)
+        } else {
+            Err(color_eyre::eyre::format_err!(
+                "{config_path:?} does not exist"
+            ))
+            .wrap_err("Failed to load configuration")
+            .with_note(|| "`make-config` can help you create a configuration file")
+        }
+    }
+
+    pub fn attendance_label(&self, attendance: &str) -> String {
+        match self.attendance_types.get(attendance) {
+            Some(hint) if !hint.trim().is_empty() => format!("{attendance} ({hint})"),
+            _ => attendance.to_string(),
+        }
+    }
 }
 
 fn default_generate_range() -> String {

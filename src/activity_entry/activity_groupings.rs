@@ -56,7 +56,7 @@ pub fn collapse_activities(
     let activities: Vec<_> = activities
         .iter()
         .cloned()
-        .flat_map(|t| t.split_on_midnight(end_fallback))
+        .flat_map(|activity| activity.split_on_midnight(end_fallback))
         .collect();
     for activity in &activities {
         grouped_activities
@@ -65,11 +65,10 @@ pub fn collapse_activities(
                 attendance_type: activity.attendance().into(),
                 description: activity.description().into(),
                 duration: TimeDelta::zero(),
-                start_of_first: *activity.start_time(),
+                start_of_first: activity.start_time(),
                 wbs: activity.wbs().into(),
             })
-            .duration +=
-            activity.end_time().copied().unwrap_or(end_fallback) - activity.start_time();
+            .duration += activity.end_time().unwrap_or(end_fallback) - activity.start_time();
     }
 
     let mut grouped_activities = Vec::from_iter(grouped_activities.into_values());
@@ -101,11 +100,11 @@ pub struct AttendanceRange {
     attendance_type: Rc<str>,
 }
 impl AttendanceRange {
-    pub fn start_time(&self) -> &DateTime<Local> {
-        &self.start
+    pub fn start_time(&self) -> DateTime<Local> {
+        self.start
     }
-    pub fn end_time(&self) -> Option<&DateTime<Local>> {
-        self.end.as_ref()
+    pub fn end_time(&self) -> Option<DateTime<Local>> {
+        self.end
     }
     pub fn attendance(&self) -> &str {
         &self.attendance_type
@@ -127,24 +126,21 @@ pub fn get_attendance_ranges(activities: &[TrackedActivity]) -> Vec<AttendanceRa
     let mut ranges = Vec::new();
     let mut last_range: Option<AttendanceRange> = None;
     for activity in activities {
-        let updated_range = last_range.and_then(|last| {
-            let follows_directly = last.end == Some(*activity.start_time());
-            let same_type = activity.attendance() == Rc::as_ref(&last.attendance_type);
-            if follows_directly && same_type {
-                Some(AttendanceRange {
-                    end: activity.end,
-                    ..last
-                })
-            } else {
-                ranges.push(last);
-                None
+        if let Some(mut last) = last_range.take() {
+            if last.end == Some(activity.start_time())
+                && activity.attendance() == Rc::as_ref(&last.attendance_type)
+            {
+                last.end = activity.end;
+                last_range = Some(last);
+                continue;
             }
-        });
-        last_range = updated_range.or(Some(AttendanceRange {
-            start: *activity.start_time(),
-            end: activity.end_time().copied(),
+            ranges.push(last);
+        }
+        last_range = Some(AttendanceRange {
+            start: activity.start_time(),
+            end: activity.end_time(),
             attendance_type: Rc::from(activity.attendance()),
-        }));
+        });
     }
     ranges.extend(last_range);
     ranges

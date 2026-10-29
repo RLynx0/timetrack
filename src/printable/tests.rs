@@ -81,7 +81,7 @@ fn render(table: &Table<&str, &str>) -> String {
 fn headers_rows_and_borders_use_the_same_fitted_width() {
     for chars in [
         TableCharOptions::rounded(),
-        TableCharOptions::_sharp(),
+        TableCharOptions::sharp(),
         TableCharOptions::ascii_markdown(),
     ] {
         let mut table = Table::from([
