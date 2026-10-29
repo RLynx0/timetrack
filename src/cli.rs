@@ -80,41 +80,46 @@ pub struct End {
     pub verbose: bool,
 }
 
-/// Show latest tracked activity or activities
+/// Show tracked activity or activities within a range
 #[derive(Debug, Clone, Parser)]
 pub struct Show {
     /// Specify what you want to see
     #[clap(default_value = "entries")]
     pub mode: Vec<ShowMode>,
 
-    /// Specify how many results should be shown
+    /// Select results by count, relative time, date bucket, or range
     ///
-    /// - <n>                Show the last <n> results
-    /// - <n>h | <n>hours    Show results in the last <n> hours
-    /// - <n>d | <n>days     Show results in the last <n> days
-    /// - <n>w | <n>weeks    Show results in the last <n> weeks
-    /// - <n>m | <n>months   Show results in the last <n> months
-    /// - 0                  Show the latest result for each mode
-    /// - hour               Show results from the current hour
-    /// - day                Show results from the current day
-    /// - week               Show results from the current week
-    /// - month              Show results from the current month
+    /// Counts:
+    /// - 0       Show only the currently active activity (default)
+    /// - <n>     Show the last <n> completed results plus the active result, if any
     ///
-    /// Counts select collapsed rows or attendance ranges in those modes.
-    #[clap(verbatim_doc_comment, short, long, conflicts_with_all = ["from", "to", "in"])]
-    pub last: Option<ActivityRange>,
-
-    /// Start at this bucket (1m, week, YYYY, YYYY-MM or YYYY-MM-DD)
-    #[clap(long)]
-    pub from: Option<crate::time_window::TimePoint>,
-
-    /// Include through this entire bucket; without --from, start at the beginning of data
-    #[clap(long)]
-    pub to: Option<crate::time_window::TimePoint>,
-
-    /// Select one entire bucket, e.g. --in 1m for the last full month
-    #[clap(long = "in", conflicts_with_all = ["from", "to"])]
-    pub r#in: Option<crate::time_window::TimePoint>,
+    /// Relative periods (include the current bucket):
+    /// - <n>h | <n>hours    The last <n> hours plus the current hour
+    /// - <n>d | <n>days     The last <n> days plus the current day
+    /// - <n>w | <n>weeks    The last <n> weeks plus the current week
+    /// - <n>m | <n>months   The last <n> months plus the current month
+    /// - hour, day, week, month  Aliases for 0h, 0d, 0w, 0m
+    ///
+    /// Absolute buckets:
+    /// - YYYY-MM | YYYY-MM-DD        Select that month or day
+    /// - YYYY..YYYY                  Select that year (a bare number is a count)
+    ///
+    /// Ranges use inclusive calendar buckets. A relative endpoint is measured from now,
+    /// except in Bucket..Nunit, where the right endpoint is measured forward from Bucket.
+    /// A relative endpoint before an absolute bucket (Nunit..Bucket) is not supported.
+    /// Counts may only be used alone.
+    ///
+    /// Examples:
+    /// - 3m                         Three completed months and the current month
+    /// - 2026-02                    The February 2026 bucket
+    /// - 2025-02-03..2026-01-16     From February 3, 2025 through January 16, 2026
+    /// - 2026-01-01..7d             From January 1 through the bucket seven days later
+    /// - 3m..1m                     From the bucket three months ago through one month ago
+    /// - ..3d                       Everything through the bucket three days ago
+    /// - 3d..                       From the bucket three days ago through now
+    /// - ..                         Everything recorded through now
+    #[clap(verbatim_doc_comment, short, long, default_value = "0")]
+    pub range: ActivityRange,
 
     /// Print machine readable values instead of a formatted table
     #[clap(short, long)]

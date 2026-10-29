@@ -36,6 +36,32 @@ function __timetrack_show_modes
 end
 function __timetrack_range_suggestions
     set -l token (commandline -ct)
+    if string match -q '*..*' -- $token
+        set -l left (string replace -r '\.\..*$' '' -- $token)
+        if string match -qr '^[0-9]{4}(-[0-9]{2}(-[0-9]{2})?)?$' -- $left
+            echo "$left.."
+            echo "$left..1day"
+            echo "$left..3days"
+            echo "$left..1month"
+        else if test -z "$left"
+            echo '..'
+            echo '..1day'
+            echo '..3days'
+            echo '..1week'
+            echo '..1month'
+            set -l year (date +%Y)
+            echo "..$year"
+            date +'%Y-%m' | string prepend '..'
+            date +'%Y-%m-%d' | string prepend '..'
+        else
+            echo "$left.."
+            echo "$left..1day"
+            echo "$left..3days"
+            echo "$left..1week"
+            echo "$left..1month"
+        end
+        return
+    end
     echo -e 0\n1\nhour\nday\nweek\nmonth
     if string match -qr '^(-[a-z]+)?[0-9]+' -- $token
         set -l n (string match -r '[0-9]+' -- $token)
@@ -43,6 +69,11 @@ function __timetrack_range_suggestions
             && echo $n\n"$n"hour\n"$n"day\n"$n"week\n"$n"month \
             || echo $n\n"$n"hours\n"$n"days\n"$n"weeks\n"$n"months
     end
+    echo -e '..\n3m..\n3m..1m'
+    set -l year (date +%Y)
+    echo "$year..$year"
+    date +%Y-%m
+    date +%Y-%m-%d
 end
 function __timetrack_activity_subcommands
     timetrack activity help | awk '
@@ -118,23 +149,12 @@ complete -c timetrack \
     -n '__fish_seen_subcommand_from edit'
 
 # Subcommand show
-function __timetrack_time_point_suggestions
-    __timetrack_range_suggestions | string match -rv '^[0-9]+$'
-    date +%Y
-    date +%Y-%m
-    date +%Y-%m-%d
-end
-for option in from to in
-    complete -c timetrack -xl $option \
-        -n '__fish_seen_subcommand_from show' \
-        -a '(__timetrack_time_point_suggestions)'
-end
 complete -c timetrack -f \
     -n '__fish_seen_subcommand_from show' \
     -a '(__timetrack_show_modes)'
 complete -c timetrack \
-    -xl last -s l \
-    -d 'Last results (collapsed rows / attendance ranges in those modes)' \
+    -xl range -s r \
+    -d 'Select results by count, relative time, date bucket, or range' \
     -n '__fish_seen_subcommand_from show' \
     -a '(__timetrack_range_suggestions)'
 complete -c timetrack \

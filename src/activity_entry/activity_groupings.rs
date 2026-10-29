@@ -76,7 +76,7 @@ pub fn collapse_activities(
     grouped_activities
 }
 
-#[derive(PartialEq, Eq, Hash)]
+#[derive(Clone, Copy, PartialEq, Eq, Hash)]
 struct ActivityGroupKey<'a> {
     wbs: &'a str,
     attendance_type: &'a str,
@@ -156,21 +156,42 @@ pub fn latest_collapsed(
     now: DateTime<Local>,
 ) -> Option<Vec<CollapsedActivity>> {
     let mut keys = Vec::new();
+    let active_key = activities
+        .iter()
+        .rev()
+        .find(|activity| activity.end_time().is_none())
+        .map(ActivityGroupKey::from);
+    if let Some(key) = active_key.as_ref() {
+        keys.push(*key);
+    }
+    let mut completed_keys = 0;
     for activity in activities.iter().rev() {
+        if activity.end_time().is_none() {
+            continue;
+        }
         let key = ActivityGroupKey::from(activity);
-        if keys.len() < count && !keys.contains(&key) {
+        if active_key.as_ref().is_some_and(|active| *active == key) || keys.contains(&key) {
+            continue;
+        }
+        if completed_keys < count {
             keys.push(key);
+            completed_keys += 1;
         }
     }
     if !exhausted {
-        let oldest_date = keys.iter().map(|k| k.date).min()?;
-        if keys.len() < count || activities.first()?.start_time().date_naive() >= oldest_date {
+        let oldest_date = keys.iter().map(|key| key.date).min();
+        let first_date = activities
+            .first()
+            .map(|activity| activity.start_time().date_naive());
+        if completed_keys < count
+            || oldest_date.is_some_and(|oldest_date| first_date.is_some_and(|d| d >= oldest_date))
+        {
             return None;
         }
     }
     let selected: Vec<_> = activities
         .iter()
-        .filter(|a| keys.contains(&ActivityGroupKey::from(*a)))
+        .filter(|activity| keys.contains(&ActivityGroupKey::from(*activity)))
         .cloned()
         .collect();
     Some(collapse_activities(&selected, now))
@@ -182,10 +203,12 @@ pub fn latest_attendance_ranges(
     exhausted: bool,
 ) -> Option<Vec<AttendanceRange>> {
     let mut ranges = get_attendance_ranges(activities);
-    if !exhausted && ranges.len() <= count {
+    let active_count = usize::from(ranges.last().is_some_and(|range| range.end.is_none()));
+    let selected_count = count.saturating_add(active_count);
+    if !exhausted && ranges.len() <= selected_count {
         return None;
     }
-    let skip = ranges.len().saturating_sub(count);
+    let skip = ranges.len().saturating_sub(selected_count);
     Some(ranges.drain(skip..).collect())
 }
 

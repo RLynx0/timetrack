@@ -13,6 +13,17 @@ fn activity(day: u32, hour: u32, key: &str, attendance: &str) -> TrackedActivity
     TrackedActivity::new_completed(start, end)
 }
 
+fn ongoing(day: u32, hour: u32, key: &str, attendance: &str) -> TrackedActivity {
+    let entry =
+        format!("2025-01-{day:02} {hour:02}:00:00 +00:00\t{key}\t{attendance}\t{key}\t{key}")
+            .parse::<ActivityEntry>()
+            .unwrap();
+    let ActivityEntry::Start(start) = entry else {
+        panic!()
+    };
+    TrackedActivity::new_ongoing(start)
+}
+
 #[test]
 fn collapsed_latest_includes_the_whole_group_and_waits_for_complete_dates() {
     let activities = vec![
@@ -68,6 +79,38 @@ fn attendance_waits_for_a_break_and_counts_ranges_not_activities() {
         3
     );
     assert!(latest_attendance_ranges(&[], 1, true).unwrap().is_empty());
+}
+
+#[test]
+fn latest_counts_add_the_active_collapsed_row_and_attendance_range() {
+    let activities = vec![
+        activity(1, 8, "old", "A"),
+        activity(2, 9, "previous", "A"),
+        ongoing(2, 10, "current", "B"),
+    ];
+    let now = *activities.last().unwrap().start_time();
+
+    let rows = latest_collapsed(&activities, 0, true, now).unwrap();
+    assert_eq!(rows.len(), 1);
+    assert_eq!(rows[0].wbs(), "current");
+    let rows = latest_collapsed(&activities, 1, true, now).unwrap();
+    assert_eq!(
+        rows.iter().map(|row| row.wbs()).collect::<Vec<_>>(),
+        ["previous", "current"]
+    );
+
+    let ranges = latest_attendance_ranges(&activities, 0, true).unwrap();
+    assert_eq!(ranges.len(), 1);
+    assert_eq!(ranges[0].attendance(), "B");
+    assert!(ranges[0].end_time().is_none());
+    let ranges = latest_attendance_ranges(&activities, 1, true).unwrap();
+    assert_eq!(
+        ranges
+            .iter()
+            .map(|range| range.attendance())
+            .collect::<Vec<_>>(),
+        ["A", "B"]
+    );
 }
 
 #[test]

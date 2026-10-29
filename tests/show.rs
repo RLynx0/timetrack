@@ -89,41 +89,41 @@ fn latest_and_counts_select_complete_groups_and_ranges() {
     let fixture = Fixture::new(&entries);
 
     assert_eq!(
-        fixture.show(&["collapsed", "-m"]),
+        fixture.show(&["collapsed", "--range", "1", "-m"]),
         "2025-01-02\t0.80\tON\ta\ta\n"
     );
-    let rows = fixture.show(&["collapsed", "--last", "3", "-m"]);
+    let rows = fixture.show(&["collapsed", "--range", "3", "-m"]);
     assert_eq!(rows.lines().count(), 3);
     assert!(rows.contains("2025-01-01\t1.00\tON\told\told"));
     assert!(rows.contains("2025-01-02\t0.80\tON\ta\ta"));
     assert!(rows.contains("2025-01-02\t0.80\tON\tb\tb"));
     assert_eq!(
         fixture
-            .show(&["collapsed", "-l", "1", "-m"])
+            .show(&["collapsed", "-r", "1", "-m"])
             .lines()
             .count(),
         1
     );
     assert_eq!(
-        fixture.show(&["collapsed", "-l", "0", "-m"]),
-        fixture.show(&["collapsed", "-m"])
+        fixture.show(&["collapsed", "-r", "0"]).trim(),
+        "You are not tracking any activity"
     );
-    let latest_attendance = fixture.show(&["attendance", "-m"]);
+    let latest_attendance = fixture.show(&["attendance", "-r", "1", "-m"]);
     assert!(latest_attendance.starts_with("2025-01-02 09:00:00"));
     assert!(latest_attendance.contains("2025-01-02 10:36:00"));
     assert_eq!(
         fixture
-            .show(&["attendance", "-l", "2", "-m"])
+            .show(&["attendance", "-r", "2", "-m"])
             .lines()
             .count(),
         2
     );
     assert_eq!(
-        fixture.show(&["entries", "-l", "3", "-m"]).lines().count(),
+        fixture.show(&["entries", "-r", "3", "-m"]).lines().count(),
         3
     );
-    assert_eq!(fixture.show(&["time", "-m"]), "60.00\n");
-    assert_eq!(fixture.show(&["time", "-l", "3", "-m"]), "180.00\n");
+    assert_eq!(fixture.show(&["time", "-r", "1", "-m"]), "60.00\n");
+    assert_eq!(fixture.show(&["time", "-r", "3", "-m"]), "180.00\n");
     assert_eq!(
         fixture.show(&["-m"]),
         end(first + TimeDelta::minutes(96))
@@ -137,15 +137,80 @@ fn latest_and_counts_select_complete_groups_and_ranges() {
         "You are not tracking any activity"
     );
     for mode in ["collapsed", "attendance", "time"] {
-        let panel = fixture.show(&[mode]);
-        assert!(panel.contains("-> "));
+        let panel = fixture.show(&[mode, "-r", "1"]);
         assert!(!panel.contains("Tracking activity"));
-        assert!(!panel.contains('│'));
+        assert!(!panel.is_empty());
     }
     let multi = fixture.show(&["collapsed", "attendance", "time"]);
     for header in [":Collapsed", ":Attendance", ":Time"] {
         assert!(multi.contains(header));
     }
+}
+
+#[test]
+fn count_ranges_include_the_active_result_in_addition_to_completed_results() {
+    let now = Utc::now();
+    let mut entries = String::new();
+    for (days_ago, key) in [(4, "a"), (3, "b"), (2, "c")] {
+        let started = now - TimeDelta::days(days_ago);
+        entries += &start(started, key, "ON");
+        entries += &end(started + TimeDelta::hours(1));
+    }
+    entries += &start(now - TimeDelta::hours(1), "active", "ON");
+    let fixture = Fixture::new(&entries);
+
+    assert_eq!(
+        fixture.show(&["entries", "-r", "2", "-m"]).lines().count(),
+        3
+    );
+    assert_eq!(
+        fixture
+            .show(&["collapsed", "-r", "3", "-m"])
+            .lines()
+            .count(),
+        4
+    );
+    assert_eq!(
+        fixture
+            .show(&["collapsed", "-r", "0", "-m"])
+            .lines()
+            .count(),
+        1
+    );
+    assert!(
+        fixture
+            .show(&["entries", "-r", "0"])
+            .contains("Tracking activity 'active'")
+    );
+    assert_eq!(
+        fixture
+            .show(&["attendance", "-r", "0", "-m"])
+            .lines()
+            .count(),
+        1
+    );
+    let active_seconds = fixture
+        .show(&["time", "-r", "0", "-m"])
+        .trim()
+        .parse::<f64>()
+        .unwrap();
+    assert!(
+        (3_590.0..3_610.0).contains(&active_seconds),
+        "{active_seconds}"
+    );
+    assert_eq!(
+        fixture
+            .show(&["attendance", "-r", "2", "-m"])
+            .lines()
+            .count(),
+        3
+    );
+    let seconds = fixture
+        .show(&["time", "-r", "2", "-m"])
+        .trim()
+        .parse::<f64>()
+        .unwrap();
+    assert!((10_790.0..10_810.0).contains(&seconds), "{seconds}");
 }
 
 #[test]
@@ -158,37 +223,38 @@ fn windows_include_entire_end_bucket_and_clip_crossing_activities() {
     entries += &end(time("2025-03-01T10:00:00Z"));
     let fixture = Fixture::new(&entries);
 
-    let rows = fixture.show(&["--from", "2025-01", "--to", "2025-02-20", "-m"]);
+    let rows = fixture.show(&["--range", "2025-01..2025-02-20", "-m"]);
     assert_eq!(rows.lines().count(), 2);
     assert!(rows.starts_with("2025-01-01 00:00:00"));
     assert!(rows.contains("2025-02-20 23:59:59.999999999"));
     assert!(!rows.contains("2025-02-21"));
     assert!(!rows.contains("2025-03-01"));
     assert_eq!(
-        fixture.show(&["time", "--in", "2025-01", "-m"]),
+        fixture.show(&["time", "--range", "2025-01", "-m"]),
         "3600.00\n"
     );
+    assert_eq!(fixture.show(&["time", "--range", "..", "-m"]), "18000.00\n");
     assert_eq!(
-        fixture.show(&["time", "--to", "2025-01", "-m"]),
+        fixture.show(&["time", "--range", "..2025-01", "-m"]),
         "7200.00\n"
     );
     assert_eq!(
-        fixture.show(&["time", "--from", "2025-03", "-m"]),
+        fixture.show(&["time", "--range", "2025-03..", "-m"]),
         "3600.00\n"
     );
     assert!(
         fixture
-            .show(&["--to", "2000"])
+            .show(&["--range", "..2000"])
             .contains("in the requested timeframe")
     );
     assert!(
         fixture
-            .show(&["collapsed", "--in", "2025-02"])
+            .show(&["collapsed", "--range", "2025-02"])
             .contains("1.00")
     );
     assert!(
         fixture
-            .show(&["attendance", "--in", "2025-02-20"])
+            .show(&["attendance", "--range", "2025-02-20"])
             .contains("1.00")
     );
 }
@@ -207,21 +273,21 @@ fn relative_month_windows_and_unsplit_latest_time() {
     entries += &end(start_current + TimeDelta::hours(2));
     let fixture = Fixture::new(&entries);
 
-    assert_eq!(fixture.show(&["time", "--in", "1m", "-m"]), "10800.00\n");
+    assert_eq!(fixture.show(&["time", "--range", "1m", "-m"]), "18000.00\n");
     assert_eq!(
-        fixture.show(&["time", "--from", "1m", "--to", "1m", "-m"]),
+        fixture.show(&["time", "--range", "1m..1m", "-m"]),
         "10800.00\n"
     );
-    assert_eq!(fixture.show(&["time", "-m"]), "14400.00\n");
-    // The historical latest entry is ongoing; a future --to must never extend it beyond now.
+    assert_eq!(fixture.show(&["time", "-r", "1", "-m"]), "7200.00\n");
+    // A future range end must never extend an ongoing activity beyond now.
     fixture.write(&start(now - TimeDelta::minutes(10), "ongoing", "ON"));
     let seconds = fixture
-        .show(&["time", "--to", "2099", "-m"])
+        .show(&["time", "--range", "..2099", "-m"])
         .trim()
         .parse::<f64>()
         .unwrap();
     assert!((600.0..610.0).contains(&seconds), "{seconds}");
-    let ongoing_row = fixture.show(&["entries", "--to", "2099", "-m"]);
+    let ongoing_row = fixture.show(&["entries", "--range", "..2099", "-m"]);
     assert!(ongoing_row.ends_with("\tongoing\tON\tongoing\tongoing\n"));
     let raw = fixture.show(&["-m"]);
     assert_eq!(raw.split('\t').count(), 5);
@@ -229,18 +295,19 @@ fn relative_month_windows_and_unsplit_latest_time() {
 }
 
 #[test]
-fn cli_rejects_conflicts_and_invalid_windows_and_handles_empty_data() {
+fn cli_rejects_old_flags_and_invalid_ranges_and_handles_empty_data() {
     let fixture = Fixture::new("");
     for args in [
-        vec!["--last", "1", "--from", "2025"],
-        vec!["--last", "1", "--to", "2025"],
-        vec!["--last", "1", "--in", "2025"],
-        vec!["--in", "2025", "--from", "2025"],
-        vec!["--in", "2025", "--to", "2025"],
-        vec!["--from", "2025-01-00"],
-        vec!["--to", "13"],
-        vec!["--from", "2025-03", "--to", "2025-01"],
-        vec!["--from", "2099"],
+        vec!["--last", "1"],
+        vec!["--from", "2025"],
+        vec!["--to", "2025"],
+        vec!["--in", "2025"],
+        vec!["--range", "2025-01-00"],
+        vec!["--range", "-1"],
+        vec!["--range", "2025-03..2025-01"],
+        vec!["--range", "2099-01"],
+        vec!["--range", "3d..2025"],
+        vec!["--range", "2..1"],
     ] {
         assert!(!fixture.run(&args).status.success(), "{args:?}");
     }
@@ -250,10 +317,22 @@ fn cli_rejects_conflicts_and_invalid_windows_and_handles_empty_data() {
             "You have not recorded any data yet"
         );
         assert_eq!(
-            fixture.show(&[mode, "--last", "3"]).trim(),
+            fixture.show(&[mode, "--range", "3"]).trim(),
             "You have not recorded any data yet"
         );
     }
+
+    let now = Utc::now();
+    let mut entries = start(now - TimeDelta::hours(1), "done", "ON");
+    entries += &end(now);
+    let idle = Fixture::new(&entries);
+    for mode in ["entries", "collapsed", "attendance", "time"] {
+        assert_eq!(
+            idle.show(&[mode, "-r", "0"]).trim(),
+            "You are not tracking any activity"
+        );
+    }
+
     // Keep the test process's timezone unchanged; only the child uses UTC.
     let _ = Local::now();
 }

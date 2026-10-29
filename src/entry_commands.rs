@@ -276,6 +276,48 @@ fn get_last_n_activities(count: usize) -> Result<Vec<TrackedActivity>> {
     Ok(activities.into_iter().rev().collect())
 }
 
+/// Get the last `count` completed activity pieces plus the currently ongoing piece.
+fn get_last_n_completed_activities_plus_ongoing(count: usize) -> Result<Vec<TrackedActivity>> {
+    let path = &files::get_entry_file_path()?;
+    if !fs::exists(path)? {
+        return Ok(Vec::new());
+    }
+    let file = fs::File::open(path)?;
+    let mut rev_lines = RawRevLines::new(file);
+    let mut activities = Vec::new();
+    let mut completed_count = 0;
+    let mut last_timestamp = None;
+    while completed_count < count
+        && let Some(line) = rev_lines.next()
+    {
+        let Some(entry) = entry_from_byte_result(line)? else {
+            continue;
+        };
+        let end_timestamp = last_timestamp.take();
+        last_timestamp = Some(*entry.time_stamp());
+        if let ActivityEntry::Start(start) = entry {
+            for activity in TrackedActivity::new(start, end_timestamp)
+                .split_on_midnight(Local::now())
+                .collect::<Vec<_>>()
+                .into_iter()
+                .rev()
+            {
+                if activity.end_time().is_none() {
+                    activities.push(activity);
+                } else if completed_count < count {
+                    activities.push(activity);
+                    completed_count += 1;
+                }
+                if completed_count == count {
+                    break;
+                }
+            }
+        }
+    }
+
+    Ok(activities.into_iter().rev().collect())
+}
+
 /// Get activities since `start_time` in chronological order
 /// Activities crossing over midnight will be automatically split
 fn get_activities_since(start_time: &DateTime<Local>) -> Result<Vec<TrackedActivity>> {

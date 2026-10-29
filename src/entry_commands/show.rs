@@ -16,51 +16,22 @@ use crate::{
     },
     activity_range::ActivityRange,
     cli, get_config, print_smart_list, print_smart_table,
-    time_window::TimeWindow,
 };
 
 use super::{
-    get_activities_between, get_activities_since, get_last_activities_until, get_last_activity,
-    get_last_entry, get_last_n_activities,
+    get_activities_between, get_last_activities_until, get_last_activity, get_last_entry,
+    get_last_n_completed_activities_plus_ongoing,
 };
 
 pub fn show_activities(show_opts: &cli::Show) -> Result<()> {
     let now = Local::now();
-    let window = if let Some(point) = &show_opts.r#in {
-        Some(TimeWindow {
-            from: Some(point.clone()),
-            to: Some(point.clone()),
-        })
-    } else if show_opts.from.is_some() || show_opts.to.is_some() {
-        Some(TimeWindow {
-            from: show_opts.from.clone(),
-            to: show_opts.to.clone(),
-        })
-    } else {
-        None
-    };
-    let window_activities = window
-        .map(|w| {
-            let (start, end) = w.resolve(now)?;
-            get_activities_between(start, end, now)
-        })
-        .transpose()?;
-    let latest = window_activities.is_none()
-        && matches!(show_opts.last, None | Some(ActivityRange::Count(0)));
-    let count = match show_opts.last {
-        Some(ActivityRange::Count(n)) if n < 0 => {
-            return Err(color_eyre::eyre::format_err!(
-                "Activity count must not be negative"
-            ));
+    let window_activities = match &show_opts.range {
+        ActivityRange::Window(window) => {
+            let (start, end) = window.resolve(now)?;
+            Some(get_activities_between(start, end, now)?)
         }
-        Some(ActivityRange::Count(n)) if n > 0 => usize::try_from(n)?,
-        _ => 1,
+        ActivityRange::Count(_) => None,
     };
-    let timeframe_activities = match &show_opts.last {
-        Some(ActivityRange::Timeframe(tf)) => Some(get_activities_since(&tf.back_from(&now))?),
-        _ => None,
-    };
-    let ranged = window_activities.as_ref().or(timeframe_activities.as_ref());
 
     for (i, mode) in show_opts.mode.iter().unique().enumerate() {
         if i > 0 {
@@ -77,7 +48,7 @@ pub fn show_activities(show_opts: &cli::Show) -> Result<()> {
                 }
             );
         }
-        if let Some(activities) = ranged {
+        if let Some(activities) = &window_activities {
             if activities.is_empty() {
                 show_empty()?;
                 continue;
@@ -96,13 +67,20 @@ pub fn show_activities(show_opts: &cli::Show) -> Result<()> {
             }
             continue;
         }
+        let ActivityRange::Count(count) = &show_opts.range else {
+            unreachable!()
+        };
+        let latest = *count == 0;
+        if latest && *mode != cli::ShowMode::Entries && show_inactive(show_opts)? {
+            continue;
+        }
         match mode {
             cli::ShowMode::Entries if latest => show_current_entry(show_opts)?,
             cli::ShowMode::Entries | cli::ShowMode::Time => {
                 let activities = if latest {
                     get_last_activity()?.into_iter().collect()
                 } else {
-                    get_last_n_activities(count)?
+                    get_last_n_completed_activities_plus_ongoing(*count)?
                 };
                 if activities.is_empty() {
                     show_empty()?;
@@ -114,7 +92,7 @@ pub fn show_activities(show_opts: &cli::Show) -> Result<()> {
             }
             cli::ShowMode::Collapsed => {
                 let rows = get_last_activities_until(|activities, exhausted| {
-                    latest_collapsed(activities, count, exhausted, now)
+                    latest_collapsed(activities, *count, exhausted, now)
                 })?;
                 if rows.is_empty() {
                     show_empty()?;
@@ -128,7 +106,7 @@ pub fn show_activities(show_opts: &cli::Show) -> Result<()> {
             }
             cli::ShowMode::Attendance => {
                 let rows = get_last_activities_until(|activities, exhausted| {
-                    latest_attendance_ranges(activities, count, exhausted)
+                    latest_attendance_ranges(activities, *count, exhausted)
                 })?;
                 if rows.is_empty() {
                     show_empty()?;
@@ -143,6 +121,22 @@ pub fn show_activities(show_opts: &cli::Show) -> Result<()> {
         }
     }
     Ok(())
+}
+
+fn show_inactive(show_opts: &cli::Show) -> Result<bool> {
+    match get_last_entry()? {
+        None => {
+            show_empty()?;
+            Ok(true)
+        }
+        Some(ActivityEntry::End(_)) => {
+            if !show_opts.machine_readable {
+                println!("You are not tracking any activity");
+            }
+            Ok(true)
+        }
+        Some(ActivityEntry::Start(_)) => Ok(false),
+    }
 }
 
 fn show_empty() -> Result<()> {

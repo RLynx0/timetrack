@@ -9,13 +9,16 @@ use crate::{
     cli,
     config::Config,
     get_config,
+    time_window::{Direction, TimePoint},
 };
 
 use super::get_activities_since;
 
 pub fn handle_generate(generate_opts: &cli::Generate) -> Result<()> {
     let now = Local::now();
-    let start_time = InLast::Months(0).back_from(&now);
+    let start_time = TimePoint::Relative(InLast::Months(0))
+        .bounds(now, Direction::Backward)?
+        .0;
     let activities = get_activities_since(&start_time)?;
     let collapsed = collapse_activities(&activities, now);
 

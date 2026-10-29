@@ -3,7 +3,7 @@ use std::str::FromStr;
 use chrono::{DateTime, Datelike, Local, NaiveDate, NaiveDateTime, NaiveTime, TimeDelta, Timelike};
 use color_eyre::eyre::{Result, format_err};
 
-use crate::activity_range::{ActivityRange, InLast};
+use crate::activity_range::InLast;
 
 #[derive(Debug, Clone)]
 pub enum TimePoint {
@@ -11,6 +11,12 @@ pub enum TimePoint {
     Year(i32),
     Month(i32, u32),
     Day(NaiveDate),
+}
+
+#[derive(Clone, Copy)]
+pub(crate) enum Direction {
+    Backward,
+    Forward,
 }
 
 impl FromStr for TimePoint {
@@ -39,11 +45,11 @@ impl FromStr for TimePoint {
                 _ => Self::Day(date),
             });
         }
-        if let Ok(ActivityRange::Timeframe(relative)) = input.parse() {
+        if let Ok(relative) = input.parse() {
             return Ok(Self::Relative(relative));
         }
         Err(format_err!(
-            "Invalid time point '{input}'; use a relative unit (1m, week) or YYYY, YYYY-MM, YYYY-MM-DD"
+            "Invalid time point '{input}'; use a relative unit (3days, week) or YYYY, YYYY-MM, YYYY-MM-DD"
         ))
     }
 }
@@ -65,48 +71,71 @@ fn month_start(year: i32, month: u32, offset: i64) -> Result<NaiveDate> {
 }
 
 impl TimePoint {
-    pub fn bounds(&self, now: DateTime<Local>) -> Result<(DateTime<Local>, DateTime<Local>)> {
-        let date = now.date_naive();
+    pub(crate) fn is_relative(&self) -> bool {
+        matches!(self, Self::Relative(_))
+    }
+
+    pub(crate) fn bounds(
+        &self,
+        reference: DateTime<Local>,
+        direction: Direction,
+    ) -> Result<(DateTime<Local>, DateTime<Local>)> {
+        let date = reference.date_naive();
         let midnight = |date: NaiveDate| date.and_time(NaiveTime::MIN);
         let shift = |time: NaiveDateTime, delta: TimeDelta| {
             time.checked_add_signed(delta)
                 .ok_or_else(|| format_err!("Time point out of range"))
         };
         let (start, end) = match self {
-            Self::Relative(InLast::Months(n)) => {
-                let offset = n
-                    .checked_neg()
-                    .ok_or_else(|| format_err!("Month out of range"))?;
-                let start = month_start(now.year(), now.month(), offset)?;
-                (
-                    midnight(start),
-                    midnight(month_start(start.year(), start.month(), 1)?),
-                )
-            }
             Self::Relative(relative) => {
+                let sign = match direction {
+                    Direction::Backward => -1,
+                    Direction::Forward => 1,
+                };
                 let (base, count, unit) = match relative {
                     InLast::Hours(n) => (
-                        date.and_hms_opt(now.hour(), 0, 0).unwrap(),
+                        date.and_hms_opt(reference.hour(), 0, 0).unwrap(),
                         *n,
-                        TimeDelta::hours(1),
+                        Some(TimeDelta::hours(1)),
                     ),
-                    InLast::Days(n) => (midnight(date), *n, TimeDelta::days(1)),
+                    InLast::Days(n) => (midnight(date), *n, Some(TimeDelta::days(1))),
                     InLast::Weeks(n) => (
                         shift(
                             midnight(date),
                             -TimeDelta::days(i64::from(date.weekday().num_days_from_monday())),
                         )?,
                         *n,
-                        TimeDelta::weeks(1),
+                        Some(TimeDelta::weeks(1)),
                     ),
-                    InLast::Months(_) => unreachable!(),
+                    InLast::Months(n) => {
+                        let offset = n
+                            .checked_mul(sign)
+                            .ok_or_else(|| format_err!("Month out of range"))?;
+                        let start = month_start(reference.year(), reference.month(), offset)?;
+                        (midnight(start), 0, None)
+                    }
                 };
-                let count = i32::try_from(count)?;
-                let delta = unit
-                    .checked_mul(count)
-                    .ok_or_else(|| format_err!("Time point out of range"))?;
-                let start = shift(base, -delta)?;
-                (start, shift(start, unit)?)
+                let start = if let Some(unit) = unit {
+                    let count = count
+                        .checked_mul(sign)
+                        .ok_or_else(|| format_err!("Time point out of range"))?;
+                    let count = i32::try_from(count)?;
+                    let delta = unit
+                        .checked_mul(count)
+                        .ok_or_else(|| format_err!("Time point out of range"))?;
+                    shift(base, delta)?
+                } else {
+                    base
+                };
+                let end = match relative {
+                    InLast::Months(_) => {
+                        midnight(month_start(start.date().year(), start.date().month(), 1)?)
+                    }
+                    InLast::Weeks(_) => shift(start, TimeDelta::weeks(1))?,
+                    InLast::Days(_) => shift(start, TimeDelta::days(1))?,
+                    InLast::Hours(_) => shift(start, TimeDelta::hours(1))?,
+                };
+                (start, end)
             }
             Self::Year(year) => {
                 let next = year
@@ -133,6 +162,7 @@ impl TimePoint {
     }
 }
 
+#[derive(Debug, Clone)]
 pub struct TimeWindow {
     pub from: Option<TimePoint>,
     pub to: Option<TimePoint>,
@@ -143,22 +173,47 @@ impl TimeWindow {
         &self,
         now: DateTime<Local>,
     ) -> Result<(Option<DateTime<Local>>, DateTime<Local>)> {
+        if matches!((&self.from, &self.to), (Some(from), Some(to)) if from.is_relative() && !to.is_relative())
+        {
+            return Err(format_err!(
+                "A relative range cannot end at an absolute date; use absolute dates for both endpoints"
+            ));
+        }
         let start = self
             .from
             .as_ref()
-            .map(|p| p.bounds(now).map(|b| b.0))
+            .map(|point| {
+                point
+                    .bounds(now, Direction::Backward)
+                    .map(|bounds| bounds.0)
+            })
             .transpose()?;
-        // Bucket ends are represented by the exclusive start of the next bucket.
+        let end_reference = match (&self.from, &self.to) {
+            (Some(from), Some(to)) if !from.is_relative() && to.is_relative() => {
+                from.bounds(now, Direction::Backward)?.0
+            }
+            _ => now,
+        };
         let end = self
             .to
             .as_ref()
-            .map(|p| p.bounds(now).map(|b| b.1))
+            .map(|point| {
+                let direction = match (&self.from, point) {
+                    (Some(from), to) if !from.is_relative() && to.is_relative() => {
+                        Direction::Forward
+                    }
+                    _ => Direction::Backward,
+                };
+                point
+                    .bounds(end_reference, direction)
+                    .map(|bounds| bounds.1)
+            })
             .transpose()?
             .unwrap_or(now)
             .min(now);
         if start.is_some_and(|start| start >= end) {
             return Err(format_err!(
-                "Empty or inverted time window; --from must precede the end of --to (and now)"
+                "Empty or inverted range; the start must precede the end (and now)"
             ));
         }
         Ok((start, end))
