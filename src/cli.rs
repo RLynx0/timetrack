@@ -32,9 +32,29 @@ Examples:
 - 3d..                       From the bucket three days ago through now
 - ..                         Everything recorded through now";
 
+const ENVIRONMENT_HELP: &str = "\
+Environment variables:
+  TIMETRACK_HOME       Config and activity definitions directory
+  TIMETRACK_DATA_HOME  Activity entries directory
+  XDG_CONFIG_HOME      Config base directory; defaults to ~/.config
+  XDG_DATA_HOME        Data base directory; defaults to ~/.local/share
+  HOME                 Used when the XDG base directories are not set
+  EDITOR               Editor for 'edit' (defaults to vi)
+  MAX_TABLE_WIDTH      Maximum table width in columns; an unsigned integer.
+                       If unset, tables fit the terminal when stdout is a TTY;
+                       redirected output is not width-limited. If too small to
+                       fit minimum columns, the table keeps its natural width.
+  FORCE_COLOR          Force colored output (color support may also honor NO_COLOR).
+
+TIMETRACK_HOME and TIMETRACK_DATA_HOME override the XDG directories directly.
+Without overrides, config files are stored under XDG_CONFIG_HOME/timetrack
+(default ~/.config/timetrack) and entries under XDG_DATA_HOME/timetrack
+(default ~/.local/share/timetrack).";
+
 #[derive(Debug, Clone, Parser)]
 #[command(author, version, about, long_about = None)]
 #[command(propagate_version = true)]
+#[command(after_help = ENVIRONMENT_HELP)]
 pub struct Cli {
     #[command(subcommand)]
     pub command: TtrCommand,
@@ -42,37 +62,37 @@ pub struct Cli {
 
 #[derive(Debug, Clone, Subcommand)]
 pub enum TtrCommand {
-    #[command()]
+    #[command(after_help = ENVIRONMENT_HELP)]
     Start(Start),
-    #[command()]
+    #[command(after_help = ENVIRONMENT_HELP)]
     End(End),
-    #[command()]
+    #[command(after_help = ENVIRONMENT_HELP)]
     Show(Show),
-    #[command()]
+    #[command(after_help = ENVIRONMENT_HELP)]
     Edit(Edit),
-    #[command()]
+    #[command(after_help = ENVIRONMENT_HELP)]
     Generate(Generate),
-    #[command(subcommand)]
+    #[command(subcommand, after_help = ENVIRONMENT_HELP)]
     Activity(ActivityCommand),
 
     // Convenience Commands
     /// Easily generate a timetrack configuration file
-    #[command()]
+    #[command(after_help = ENVIRONMENT_HELP)]
     MakeConfig,
-    #[command()]
+    #[command(after_help = ENVIRONMENT_HELP)]
     ListAttendanceTypes(ListAttendanceTypes),
 }
 
 /// Edit or list trackable activities
 #[derive(Debug, Clone, Subcommand)]
 pub enum ActivityCommand {
-    #[command()]
+    #[command(after_help = ENVIRONMENT_HELP)]
     Set(SetActivity),
-    #[command()]
+    #[command(after_help = ENVIRONMENT_HELP)]
     Rm(RemoveActivity),
-    #[command()]
+    #[command(after_help = ENVIRONMENT_HELP)]
     Mv(MoveActivity),
-    #[command()]
+    #[command(after_help = ENVIRONMENT_HELP)]
     Ls(ListActivities),
 }
 
