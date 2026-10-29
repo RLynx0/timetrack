@@ -31,16 +31,21 @@ impl Fixture {
         fs::write(self.0.join("entries"), entries).unwrap();
     }
 
-    fn run(&self, args: &[&str]) -> Output {
-        Command::new(env!("CARGO_BIN_EXE_timetrack"))
+    fn command(&self, args: &[&str]) -> Command {
+        let mut command = Command::new(env!("CARGO_BIN_EXE_timetrack"));
+        command
             .arg("show")
             .args(args)
             .env("TIMETRACK_HOME", &self.0)
             .env("TIMETRACK_DATA_HOME", &self.0)
             .env("TZ", "UTC")
             .env("NO_COLOR", "1")
-            .output()
-            .unwrap()
+            .env_remove("MAX_TABLE_WIDTH");
+        command
+    }
+
+    fn run(&self, args: &[&str]) -> Output {
+        self.command(args).output().unwrap()
     }
 
     fn show(&self, args: &[&str]) -> String {
@@ -80,6 +85,52 @@ fn piped_tables_preserve_long_descriptions() {
     let output = Fixture::new(&entries).show(&["entries", "-r", "1"]);
     assert!(output.contains(&description));
     assert!(!output.contains("..."));
+}
+
+#[test]
+fn max_table_width_limits_piped_tables() {
+    let description = "A description longer than a typical terminal width ".repeat(5);
+    let mut entries = start(time("2025-01-02T09:00:00Z"), &description, "ON");
+    entries += &end(time("2025-01-02T10:00:00Z"));
+    let fixture = Fixture::new(&entries);
+
+    for width in [80, 120] {
+        let output = fixture
+            .command(&["entries", "-r", "1"])
+            .env("MAX_TABLE_WIDTH", width.to_string())
+            .output()
+            .unwrap();
+        assert!(
+            output.status.success(),
+            "{}",
+            String::from_utf8_lossy(&output.stderr)
+        );
+        let table = String::from_utf8(output.stdout).unwrap();
+        assert!(table.contains("..."));
+        assert!(!table.contains(&description));
+        assert!(
+            table
+                .lines()
+                .all(|line| unicode_width::UnicodeWidthStr::width(line) == width)
+        );
+    }
+}
+
+#[test]
+fn invalid_max_table_width_reports_an_error() {
+    let mut entries = start(time("2025-01-02T09:00:00Z"), "work", "ON");
+    entries += &end(time("2025-01-02T10:00:00Z"));
+    let fixture = Fixture::new(&entries);
+
+    for width in ["", "wide", "-1", "9999999999999999999999999999999999999999"] {
+        let output = fixture
+            .command(&["entries", "-r", "1"])
+            .env("MAX_TABLE_WIDTH", width)
+            .output()
+            .unwrap();
+        assert!(!output.status.success(), "{width:?}");
+        assert!(String::from_utf8_lossy(&output.stderr).contains("MAX_TABLE_WIDTH"));
+    }
 }
 
 #[test]

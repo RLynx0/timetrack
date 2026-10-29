@@ -1,5 +1,6 @@
 use std::{
     borrow::Cow,
+    env,
     fmt::Display,
     io::{self, IsTerminal, Write},
     rc::Rc,
@@ -39,13 +40,22 @@ pub struct TablePrintOptions {
     pub width: TableWidth,
 }
 
-#[derive(Clone, Debug, Default)]
+#[derive(Clone, Debug)]
 #[allow(dead_code)]
 pub enum TableWidth {
-    #[default]
     Auto,
     Unbounded,
     Fixed(usize),
+}
+
+impl Default for TableWidth {
+    fn default() -> Self {
+        env::var("MAX_TABLE_WIDTH")
+            .map(|w| w.parse())
+            .map(|wr| wr.expect("MAX_TABLE_WIDTH must be an unsigned integer"))
+            .map(Self::Fixed)
+            .unwrap_or(Self::Auto)
+    }
 }
 
 impl TableWidth {
@@ -57,7 +67,7 @@ impl TableWidth {
                     return None;
                 }
                 terminal_size::terminal_size_of(stdout)
-                    .map(|(terminal_size::Width(width), _)| usize::from(width))
+                    .map(|(terminal_size::Width(width), _)| width as usize)
                     .filter(|&width| width > 0)
             }
             Self::Unbounded => None,
